@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.logging.config import configure_logging
@@ -15,9 +16,13 @@ from app.main import app
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
+# StaticPool forces all connections to share one underlying SQLite connection.
+# Without it, create_all() and the test session use different connections —
+# each in-memory SQLite connection is its own empty database.
 test_engine = create_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 

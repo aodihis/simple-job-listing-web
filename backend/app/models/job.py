@@ -79,11 +79,12 @@ class Job(Base):
     )
 
     tags: Mapped[list[Tag]] = relationship("Tag", secondary=job_tags, back_populates="jobs")
-    form_fields: Mapped[list] = relationship(
+    form_fields = relationship(
         "JobFormField",
         back_populates="job",
         order_by="JobFormField.order",
         cascade="all, delete-orphan",
+        uselist=True,
     )
 
     def __repr__(self) -> str:
