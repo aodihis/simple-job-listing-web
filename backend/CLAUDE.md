@@ -138,3 +138,53 @@ def configure_logging(log_level: str = "INFO", json_logs: bool = False) -> None:
 ## API Documentation
 
 All endpoints must include a `summary=` string. Pydantic schema fields must include `Field(description=...)` for non-obvious fields. These populate the Swagger UI at `/docs` automatically.
+
+## Testing
+
+**Every new service function and every new API endpoint must have test cases written in the same change.**
+
+Tests live in `tests/` and mirror the source structure:
+
+| Source | Test file |
+|--------|-----------|
+| `app/routers/auth.py` | `tests/test_auth.py` |
+| `app/routers/jobs.py` | `tests/test_jobs.py` |
+| `app/routers/public_jobs.py` | `tests/test_public_jobs.py` |
+| `app/routers/<resource>.py` | `tests/test_<resource>.py` |
+| `app/utils/security.py` | `tests/test_security.py` |
+| `app/schemas/<resource>.py` (validation logic) | `tests/test_<resource>.py` |
+
+### Test infrastructure
+
+- Use the `client` fixture from `conftest.py` for HTTP-level tests (via `TestClient`).
+- Use the `db_session` fixture for service-level unit tests that need a real DB but no HTTP layer.
+- The test DB is an in-memory SQLite with `StaticPool` — isolated per test, no file left behind.
+- Register a new admin and log in to get `auth_headers` for any protected endpoint test.
+
+### What to cover for each new endpoint
+
+1. **Happy path** — correct inputs return the expected status code and response shape.
+2. **Auth guard** — missing or invalid token returns 401.
+3. **Validation** — invalid / missing required fields return 422.
+4. **Not found** — unknown `public_id` returns 404.
+5. **Business rule errors** — e.g. conflict (409), forbidden (403), expired resource.
+
+### What to cover for each new service function
+
+- Normal return value with valid inputs.
+- Each `AppException` the function can raise (call conditions that trigger it, assert the exception type).
+- Edge cases specific to the function's logic (empty lists, boundary values, etc.).
+
+### Schema validation tests
+
+Any `FormFieldCreate`-style schema with custom validators (`@field_validator`, `@model_validator`) needs unit tests that instantiate the schema directly with `pytest.raises(ValidationError)` — no HTTP layer needed.
+
+### Running tests
+
+```bash
+cd backend
+.venv/Scripts/python -m pytest tests/ -v        # Windows
+.venv/bin/python -m pytest tests/ -v             # macOS/Linux
+```
+
+All tests must pass before a change is considered complete.
