@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import require_active_admin
 from app.models.user import AdminUser
+from app.schemas.form_field import FormFieldRead, FormFieldsUpdate
 from app.schemas.job import JobCreate, JobListItem, JobRead
-from app.services import job_service
+from app.services import form_field_service, job_service
 
 router = APIRouter(prefix="/api/v1/admin/jobs", tags=["Admin — Jobs"])
 
@@ -25,6 +26,17 @@ def _build_job_read(job) -> JobRead:  # type: ignore[no-untyped-def]
         is_active=job.is_active,
         is_deleted=job.is_deleted,
         tags=[{"name": t.name} for t in job.tags],
+        form_fields=[
+            FormFieldRead(
+                id=f.id,
+                label=f.label,
+                field_type=f.field_type,
+                is_required=f.is_required,
+                options=f.options,
+                order=f.order,
+            )
+            for f in sorted(job.form_fields, key=lambda f: f.order)
+        ],
         expires_at=job.expires_at,
         created_at=job.created_at,
         updated_at=job.updated_at,
@@ -136,3 +148,39 @@ def delete_job(
     db.commit()
     db.refresh(job)
     return _build_job_read(job)
+
+
+@router.get(
+    "/{job_id}/form-fields",
+    response_model=list[FormFieldRead],
+    summary="Get application form fields for a job",
+    description="Returns the ordered list of custom fields for the job's built-in application form.",
+)
+def get_form_fields(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(require_active_admin),
+) -> list[FormFieldRead]:
+    return form_field_service.get_form_fields(db, job_id)
+
+
+@router.put(
+    "/{job_id}/form-fields",
+    response_model=list[FormFieldRead],
+    summary="Replace application form fields for a job",
+    description=(
+        "Atomically replaces all custom form fields for the job's built-in application form. "
+        "Send an empty `fields` array to clear all fields. "
+        "Maximum 20 fields. Allowed types: text, textarea, email, url, number, radio, select, checkbox. "
+        "radio / select / checkbox require a non-empty `options` list (max 20 items, each ≤ 100 chars)."
+    ),
+)
+def replace_form_fields(
+    job_id: str,
+    body: FormFieldsUpdate,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(require_active_admin),
+) -> list[FormFieldRead]:
+    fields = form_field_service.replace_form_fields(db, job_id, body, current_user)
+    db.commit()
+    return fields

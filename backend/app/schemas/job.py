@@ -5,6 +5,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
+from app.schemas.form_field import FormFieldRead
+
 
 class EmploymentType(str, Enum):
     full_time = "full_time"
@@ -73,6 +75,10 @@ class JobRead(BaseModel):
     is_active: bool
     is_deleted: bool
     tags: list[TagRead]
+    form_fields: list[FormFieldRead] = Field(
+        default_factory=list,
+        description="Custom application form fields. Only relevant when application_mode is 'form'.",
+    )
     expires_at: datetime | None
     created_at: datetime
     updated_at: datetime

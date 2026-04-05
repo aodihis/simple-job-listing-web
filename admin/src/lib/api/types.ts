@@ -35,6 +35,7 @@ export interface JobRead extends JobListItem {
 	description: string;
 	application_mode: ApplicationMode;
 	external_apply_url: string | null;
+	form_fields: FormFieldRead[];
 	updated_at: string;
 	posted_by_email: string;
 }
@@ -57,6 +58,40 @@ export interface PaginatedJobs {
 	page: number;
 	per_page: number;
 	pages: number;
+}
+
+// ── Form fields ───────────────────────────────────────────────────────────────
+
+export type FieldType =
+	| 'text'
+	| 'textarea'
+	| 'email'
+	| 'url'
+	| 'number'
+	| 'radio'
+	| 'select'
+	| 'checkbox';
+
+export const OPTION_FIELD_TYPES: FieldType[] = ['radio', 'select', 'checkbox'];
+
+export interface FormFieldRead {
+	id: number;
+	label: string;
+	field_type: FieldType;
+	is_required: boolean;
+	options: string[];
+	order: number;
+}
+
+export interface FormFieldCreate {
+	label: string;
+	field_type: FieldType;
+	is_required: boolean;
+	options: string[];
+}
+
+export interface FormFieldsUpdate {
+	fields: FormFieldCreate[];
 }
 
 export class ApiError extends Error {

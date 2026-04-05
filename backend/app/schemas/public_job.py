@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas.form_field import FormFieldRead
 
 
 class PublicTagRead(BaseModel):
@@ -38,6 +40,10 @@ class PublicJobRead(BaseModel):
     application_mode: str
     external_apply_url: str | None
     tags: list[PublicTagRead]
+    form_fields: list[FormFieldRead] = Field(
+        default_factory=list,
+        description="Custom application form fields. Populated when application_mode is 'form'.",
+    )
     created_at: datetime
     expires_at: datetime | None
 

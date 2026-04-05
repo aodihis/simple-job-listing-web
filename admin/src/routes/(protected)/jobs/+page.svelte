@@ -164,6 +164,12 @@
 							<td class="date">{new Date(job.created_at).toLocaleDateString()}</td>
 							<td class="actions-cell">
 								{#if !job.is_deleted}
+									<a
+										href="/jobs/{job.public_id}/form"
+										class="action-btn action-btn-form"
+										title="Edit application form"
+									>Edit Form</a>
+
 									<button
 										class="action-btn"
 										disabled={actionLoadingId === job.public_id}
@@ -407,6 +413,18 @@
 	.action-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.action-btn-form {
+		color: var(--color-primary);
+		border-color: #bfdbfe;
+		text-decoration: none;
+		display: inline-block;
+	}
+
+	.action-btn-form:hover {
+		background: #eff6ff;
+		border-color: var(--color-primary);
 	}
 
 	.action-btn-danger {

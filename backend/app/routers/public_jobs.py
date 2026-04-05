@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.schemas.form_field import FormFieldRead
 from app.schemas.public_job import PublicJobListItem, PublicJobRead, PublicPaginatedJobs
 from app.services import job_service
 
@@ -21,6 +22,17 @@ def _build_public_read(job) -> PublicJobRead:  # type: ignore[no-untyped-def]
         application_mode=job.application_mode,
         external_apply_url=job.external_apply_url,
         tags=[{"name": t.name} for t in job.tags],
+        form_fields=[
+            FormFieldRead(
+                id=f.id,
+                label=f.label,
+                field_type=f.field_type,
+                is_required=f.is_required,
+                options=f.options,
+                order=f.order,
+            )
+            for f in sorted(job.form_fields, key=lambda f: f.order)
+        ],
         created_at=job.created_at,
         expires_at=job.expires_at,
     )
