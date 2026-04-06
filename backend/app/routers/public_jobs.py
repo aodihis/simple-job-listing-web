@@ -131,4 +131,8 @@ def apply_for_job(
         email_service.send_new_application_notification,
         application_public_id=result.public_id,
     )
+    background_tasks.add_task(
+        email_service.send_application_confirmation,
+        application_public_id=result.public_id,
+    )
     return result

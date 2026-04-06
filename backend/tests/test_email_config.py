@@ -41,6 +41,7 @@ FULL_SMTP_SETTINGS = {
     "SMTP_PORT": 587,
     "SMTP_USER": "user@example.com",
     "SMTP_PASSWORD": "secret",
+    "SMTP_FROM_NAME": None,
     "SMTP_NOTIFICATION_TO": "admin@example.com",
 }
 
@@ -187,3 +188,103 @@ class TestSendNewApplicationNotification:
             assert resp.status_code == 201
             # TestClient runs background tasks synchronously
             mock_notify.assert_called_once()
+
+
+# ── send_application_confirmation ─────────────────────────────────────────────
+
+class TestSendApplicationConfirmation:
+    def test_sends_email_to_applicant(self, db_session: Session) -> None:
+        from app.services.email_service import send_application_confirmation
+
+        app_id = _seed_application(db_session)
+
+        with patch("app.services.email_service.get_settings", return_value=_make_settings()):
+            with patch("smtplib.SMTP") as mock_smtp_cls:
+                mock_smtp = MagicMock()
+                mock_smtp_cls.return_value.__enter__ = lambda s: mock_smtp
+                mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+                send_application_confirmation(app_id, _db=db_session)
+
+        mock_smtp.sendmail.assert_called_once()
+        args = mock_smtp.sendmail.call_args[0]
+        # From must be the SMTP user, To must be the applicant
+        assert args[0] == "user@example.com"
+        assert args[1] == "alice@example.com"
+
+    def test_email_subject_contains_job_title(self, db_session: Session) -> None:
+        from app.services.email_service import send_application_confirmation
+
+        app_id = _seed_application(db_session)
+
+        with patch("app.services.email_service.get_settings", return_value=_make_settings()):
+            with patch("smtplib.SMTP") as mock_smtp_cls:
+                mock_smtp = MagicMock()
+                mock_smtp_cls.return_value.__enter__ = lambda s: mock_smtp
+                mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+                send_application_confirmation(app_id, _db=db_session)
+
+        raw_message = mock_smtp.sendmail.call_args[0][2]
+        assert "Dev" in raw_message  # job title from _seed_application
+
+    def test_skips_when_notifications_disabled(self, db_session: Session) -> None:
+        from app.services.email_service import send_application_confirmation
+
+        app_id = _seed_application(db_session)
+
+        with patch(
+            "app.services.email_service.get_settings",
+            return_value=_make_settings(NOTIFICATIONS_ENABLED=False),
+        ):
+            with patch("smtplib.SMTP") as mock_smtp_cls:
+                send_application_confirmation(app_id, _db=db_session)
+                mock_smtp_cls.assert_not_called()
+
+    def test_skips_when_smtp_host_missing(self, db_session: Session) -> None:
+        from app.services.email_service import send_application_confirmation
+
+        app_id = _seed_application(db_session)
+
+        with patch(
+            "app.services.email_service.get_settings",
+            return_value=_make_settings(SMTP_HOST=None),
+        ):
+            with patch("smtplib.SMTP") as mock_smtp_cls:
+                send_application_confirmation(app_id, _db=db_session)
+                mock_smtp_cls.assert_not_called()
+
+    def test_skips_when_application_not_found(self, db_session: Session) -> None:
+        from app.services.email_service import send_application_confirmation
+
+        with patch("app.services.email_service.get_settings", return_value=_make_settings()):
+            with patch("smtplib.SMTP") as mock_smtp_cls:
+                send_application_confirmation("nonexistent-id", _db=db_session)
+                mock_smtp_cls.assert_not_called()
+
+    def test_does_not_raise_on_smtp_failure(self, db_session: Session) -> None:
+        from app.services.email_service import send_application_confirmation
+
+        app_id = _seed_application(db_session)
+
+        with patch("app.services.email_service.get_settings", return_value=_make_settings()):
+            with patch("smtplib.SMTP", side_effect=ConnectionRefusedError("refused")):
+                send_application_confirmation(app_id, _db=db_session)
+
+    def test_both_background_tasks_triggered_on_apply(
+        self, client: TestClient, auth_headers: dict
+    ) -> None:
+        """Integration: POST /jobs/{id}/apply enqueues both the admin notification and applicant confirmation."""
+        job_resp = client.post(ADMIN_JOBS_URL, json=BASE_JOB, headers=auth_headers)
+        job_id = job_resp.json()["public_id"]
+
+        with patch(
+            "app.services.email_service.send_new_application_notification"
+        ) as mock_notify, patch(
+            "app.services.email_service.send_application_confirmation"
+        ) as mock_confirm:
+            resp = client.post(
+                PUBLIC_APPLY_URL.format(job_id=job_id),
+                json={"applicant_name": "Bob", "applicant_email": "bob@x.com", "responses": {}},
+            )
+            assert resp.status_code == 201
+            mock_notify.assert_called_once()
+            mock_confirm.assert_called_once()

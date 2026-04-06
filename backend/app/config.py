@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None
     SMTP_PASSWORD: str | None = None
+    SMTP_FROM_NAME: str | None = None  # Display name in From header, e.g. "Acme Careers"
     SMTP_NOTIFICATION_TO: str | None = None
 
     @computed_field  # type: ignore[misc]
