@@ -7,7 +7,7 @@ from app.database import get_db
 from app.dependencies import require_active_admin
 from app.models.user import AdminUser
 from app.schemas.form_field import FormFieldRead, FormFieldsUpdate
-from app.schemas.job import JobCreate, JobListItem, JobRead
+from app.schemas.job import JobCreate, JobListItem, JobRead, JobUpdate
 from app.services import form_field_service, job_service
 
 router = APIRouter(prefix="/api/v1/admin/jobs", tags=["Admin — Jobs"])
@@ -111,6 +111,22 @@ def get_job(
     current_user: AdminUser = Depends(require_active_admin),
 ) -> JobRead:
     job = job_service.get_job_by_public_id(db, job_id)
+    return _build_job_read(job)
+
+
+@router.put(
+    "/{job_id}",
+    response_model=JobRead,
+    summary="Update a job posting",
+    description="Replace all editable fields on a job. Tags are created automatically if new.",
+)
+def update_job(
+    job_id: str,
+    body: JobUpdate,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(require_active_admin),
+) -> JobRead:
+    job = job_service.update_job(db, job_id, body, current_user)
     return _build_job_read(job)
 
 

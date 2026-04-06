@@ -3,17 +3,14 @@ import { redirect } from '@sveltejs/kit';
 import { get } from 'svelte/store';
 import { token } from '$lib/stores/auth';
 import { isTokenExpired } from '$lib/utils/auth';
-import type { LayoutLoad } from './$types';
+import type { PageLoad } from './$types';
 
-export const load: LayoutLoad = () => {
+export const load: PageLoad = () => {
 	if (!browser) return;
 
 	const currentToken = get(token);
 
-	if (!currentToken || isTokenExpired(currentToken)) {
-		if (currentToken) {
-			token.set(null);
-		}
-		throw redirect(302, '/login');
+	if (currentToken && !isTokenExpired(currentToken)) {
+		throw redirect(302, '/dashboard');
 	}
 };

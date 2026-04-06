@@ -71,7 +71,7 @@
 			});
 
 			log.info('job.created', { title: job.title, public_id: job.public_id });
-			goto('/jobs');
+			goto(`/jobs/${job.public_id}/form`);
 		} catch (err) {
 			if (err instanceof ApiError) {
 				if (err.status === 422) {
@@ -95,18 +95,19 @@
 </svelte:head>
 
 <div class="page">
+	<a href="/jobs" class="back-link">← Back to Jobs</a>
 	<div class="page-header">
-		<div>
-			<a href="/jobs" class="back-link">← Back to Jobs</a>
-			<h1>Post a New Job</h1>
-		</div>
+		<h1>Post a New Job</h1>
+		<button type="submit" form="new-job-form" class="btn-primary" disabled={isLoading}>
+			{isLoading ? 'Publishing…' : 'Publish Job'}
+		</button>
 	</div>
 
 	{#if errorMessage}
 		<div class="alert alert-error" role="alert">{errorMessage}</div>
 	{/if}
 
-	<form on:submit|preventDefault={handleSubmit} novalidate>
+	<form id="new-job-form" on:submit|preventDefault={handleSubmit} novalidate>
 		<div class="form-section">
 			<h2>Basic Info</h2>
 
@@ -199,7 +200,7 @@
 			<h2>Application Settings</h2>
 
 			<div class="field">
-				<label>How should candidates apply?</label>
+				<span class="field-label">How should candidates apply?</span>
 				<div class="radio-group">
 					<label class="radio-label">
 						<input
@@ -246,18 +247,12 @@
 			{/if}
 		</div>
 
-		<div class="form-actions">
-			<a href="/jobs" class="btn-secondary">Cancel</a>
-			<button type="submit" class="btn-primary" disabled={isLoading}>
-				{#if isLoading}Publishing…{:else}Publish Job{/if}
-			</button>
-		</div>
 	</form>
 </div>
 
 <style>
 	.page {
-		max-width: 760px;
+		width: 100%;
 	}
 
 	.back-link {
@@ -277,6 +272,10 @@
 	}
 
 	.page-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
 		margin-bottom: 1.5rem;
 	}
 
@@ -342,7 +341,7 @@
 		font-weight: normal;
 	}
 
-	label {
+	label, .field-label {
 		font-size: 0.875rem;
 		font-weight: 500;
 	}
@@ -431,13 +430,6 @@
 		color: var(--color-text-muted);
 	}
 
-	.form-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.75rem;
-		padding-top: 0.5rem;
-	}
-
 	.btn-primary {
 		padding: 0.55rem 1.25rem;
 		background: var(--color-primary);
@@ -457,22 +449,6 @@
 	.btn-primary:disabled {
 		opacity: 0.7;
 		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		padding: 0.55rem 1.25rem;
-		background: var(--color-surface);
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
-		font-size: 0.95rem;
-		text-decoration: none;
-		transition: border-color 0.15s;
-		display: inline-block;
-	}
-
-	.btn-secondary:hover {
-		border-color: var(--color-text-muted);
 	}
 
 	@media (max-width: 600px) {

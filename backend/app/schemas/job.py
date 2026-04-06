@@ -57,6 +57,34 @@ class JobCreate(BaseModel):
         return [tag.strip().lower() for tag in v if tag.strip()]
 
 
+class JobUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=255, description="Job title.")
+    description: str = Field(min_length=1, description="Full job description.")
+    employment_type: EmploymentType = Field(description="Employment type.")
+    location: str | None = Field(default=None, max_length=255, description="Office location.")
+    is_remote: bool = Field(default=False, description="Whether the role is remote.")
+    application_mode: ApplicationMode = Field(
+        default=ApplicationMode.form,
+        description="'form' for built-in form; 'external_url' to redirect applicants.",
+    )
+    external_apply_url: str | None = Field(
+        default=None, max_length=500, description="Required when application_mode is 'external_url'."
+    )
+    tags: list[str] = Field(default_factory=list, description="Tag names.")
+    expires_at: datetime | None = Field(default=None, description="Optional expiry date.")
+
+    @model_validator(mode="after")
+    def validate_external_url_required(self) -> JobUpdate:
+        if self.application_mode == ApplicationMode.external_url and not self.external_apply_url:
+            raise ValueError("external_apply_url is required when application_mode is 'external_url'.")
+        return self
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def normalize_tags(cls, v: list[str]) -> list[str]:
+        return [tag.strip().lower() for tag in v if tag.strip()]
+
+
 class TagRead(BaseModel):
     name: str
 

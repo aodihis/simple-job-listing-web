@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { JobCreate, JobRead, PaginatedJobs } from './types';
+import type { JobCreate, JobRead, JobUpdate, PaginatedJobs } from './types';
 
 export async function listAdminJobs(params?: {
 	page?: number;
@@ -20,6 +20,10 @@ export async function getAdminJob(publicId: string): Promise<JobRead> {
 
 export async function createJob(data: JobCreate): Promise<JobRead> {
 	return api.post<JobRead>('/api/v1/admin/jobs', data);
+}
+
+export async function updateJob(publicId: string, data: JobUpdate): Promise<JobRead> {
+	return api.put<JobRead>(`/api/v1/admin/jobs/${publicId}`, data);
 }
 
 export async function toggleJob(publicId: string): Promise<JobRead> {

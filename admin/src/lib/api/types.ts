@@ -40,6 +40,18 @@ export interface JobRead extends JobListItem {
 	posted_by_email: string;
 }
 
+export interface JobUpdate {
+	title: string;
+	description: string;
+	employment_type: EmploymentType;
+	location: string | null;
+	is_remote: boolean;
+	application_mode: ApplicationMode;
+	external_apply_url: string | null;
+	tags: string[];
+	expires_at: string | null;
+}
+
 export interface JobCreate {
 	title: string;
 	description: string;

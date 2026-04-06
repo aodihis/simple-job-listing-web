@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.logging.config import get_logger
 from app.models.job import Job, Tag
 from app.models.user import AdminUser
-from app.schemas.job import JobCreate
+from app.schemas.job import JobCreate, JobUpdate
 from app.utils.exceptions import NotFoundError
 
 log = get_logger(__name__)
@@ -52,6 +52,23 @@ def create_job(db: Session, data: JobCreate, posted_by: AdminUser) -> Job:
         posted_by=posted_by.email,
         tags=data.tags,
     )
+    return job
+
+
+def update_job(db: Session, public_id: str, data: JobUpdate, updated_by: AdminUser) -> Job:
+    job = get_job_by_public_id(db, public_id)
+
+    job.title = data.title
+    job.description = data.description
+    job.employment_type = data.employment_type.value
+    job.location = data.location
+    job.is_remote = data.is_remote
+    job.application_mode = data.application_mode.value
+    job.external_apply_url = data.external_apply_url
+    job.expires_at = data.expires_at
+    job.tags = _get_or_create_tags(db, data.tags)
+
+    log.info("job.updated", public_id=public_id, updated_by=updated_by.email)
     return job
 
 
