@@ -3,7 +3,7 @@
 	import { listJobs } from '$lib/api/jobs';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
-	import type { JobListItem, PaginatedJobs } from '$lib/api/types';
+	import type { PaginatedJobs } from '$lib/api/types';
 
 	const log = createLogger('JobListingPage');
 
@@ -29,6 +29,8 @@
 	let remoteOnly = false;
 	let sort: 'newest' | 'oldest' = 'newest';
 	let currentPage = 1;
+	let selectedTags: string[] = [];
+	let pendingTag = '';
 
 	// Data state
 	let data: PaginatedJobs | null = null;
@@ -44,6 +46,7 @@
 		try {
 			data = await listJobs({
 				q: searchQuery || undefined,
+				tags: selectedTags.length ? selectedTags : undefined,
 				employment_type: selectedType || undefined,
 				is_remote: remoteOnly || undefined,
 				sort,
@@ -96,8 +99,38 @@
 		load(1);
 	}
 
+	function addTag() {
+		const tag = pendingTag.trim().toLowerCase();
+		if (tag && !selectedTags.includes(tag)) {
+			selectedTags = [...selectedTags, tag];
+			load(1);
+		}
+		pendingTag = '';
+	}
+
+	function removeTag(tag: string) {
+		selectedTags = selectedTags.filter((t) => t !== tag);
+		load(1);
+	}
+
+	function handleTagKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ',') {
+			e.preventDefault();
+			addTag();
+		}
+	}
+
 	function formatDate(iso: string) {
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+	}
+
+	function formatSalary(min: number | null, max: number | null): string | null {
+		const fmt = (n: number) =>
+			n >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${n.toLocaleString()}`;
+		if (min !== null && max !== null) return `${fmt(min)} – ${fmt(max)}`;
+		if (min !== null) return `From ${fmt(min)}`;
+		if (max !== null) return `Up to ${fmt(max)}`;
+		return null;
 	}
 
 	onMount(() => load());
@@ -138,6 +171,29 @@
 				<option value="newest">Newest first</option>
 				<option value="oldest">Oldest first</option>
 			</select>
+		</div>
+
+		<div class="tag-filter">
+			<div class="tag-input-wrap">
+				<input
+					type="text"
+					class="tag-input"
+					placeholder="Filter by tag…"
+					bind:value={pendingTag}
+					on:keydown={handleTagKeydown}
+				/>
+				<button class="tag-add-btn" on:click={addTag} disabled={!pendingTag.trim()}>Add</button>
+			</div>
+			{#if selectedTags.length > 0}
+				<div class="tag-chips">
+					{#each selectedTags as tag}
+						<span class="tag-chip">
+							{tag}
+							<button class="tag-chip-remove" on:click={() => removeTag(tag)} aria-label="Remove {tag}">×</button>
+						</span>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -180,6 +236,9 @@
 								<span class="meta-location">{job.location}</span>
 							{/if}
 						</div>
+					{#if formatSalary(job.salary_min, job.salary_max)}
+						<div class="card-salary">{formatSalary(job.salary_min, job.salary_max)}</div>
+					{/if}
 					</div>
 
 					{#if job.tags.length > 0}
@@ -231,6 +290,8 @@
 					selectedType = '';
 					remoteOnly = false;
 					sort = 'newest';
+					selectedTags = [];
+					pendingTag = '';
 					load(1);
 				}}
 			>
@@ -330,7 +391,7 @@
 	/* Loading skeletons */
 	.loading-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		grid-template-columns: repeat(2, 1fr);
 		gap: 1rem;
 	}
 
@@ -349,7 +410,7 @@
 	/* Job grid */
 	.job-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		grid-template-columns: repeat(2, 1fr);
 		gap: 1rem;
 	}
 
@@ -414,6 +475,13 @@
 	.meta-location {
 		font-size: 0.8rem;
 		color: #718096;
+	}
+
+	.card-salary {
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: #15803d;
+		margin-top: 0.25rem;
 	}
 
 	/* Tags */
@@ -516,6 +584,88 @@
 		color: #718096;
 	}
 
+	/* Tag filter */
+	.tag-filter {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.tag-input-wrap {
+		display: flex;
+		gap: 0.4rem;
+	}
+
+	.tag-input {
+		flex: 1;
+		padding: 0.55rem 0.9rem;
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		font-size: 0.9rem;
+		background: white;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+
+	.tag-input:focus {
+		border-color: #3b82f6;
+	}
+
+	.tag-add-btn {
+		padding: 0.5rem 0.85rem;
+		background: #3b82f6;
+		color: white;
+		border: none;
+		border-radius: 8px;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.tag-add-btn:hover:not(:disabled) {
+		background: #2563eb;
+	}
+
+	.tag-add-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.tag-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+
+	.tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.2rem 0.55rem;
+		background: #eff6ff;
+		border: 1px solid #bfdbfe;
+		border-radius: 999px;
+		font-size: 0.8rem;
+		color: #1d4ed8;
+	}
+
+	.tag-chip-remove {
+		background: none;
+		border: none;
+		padding: 0;
+		line-height: 1;
+		font-size: 1rem;
+		color: #3b82f6;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+	}
+
+	.tag-chip-remove:hover {
+		color: #1d4ed8;
+	}
+
 	@media (max-width: 600px) {
 		.filters {
 			flex-direction: column;
@@ -526,7 +676,8 @@
 			justify-content: space-between;
 		}
 
-		.job-grid {
+		.job-grid,
+		.loading-grid {
 			grid-template-columns: 1fr;
 		}
 	}

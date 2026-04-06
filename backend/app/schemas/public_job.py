@@ -21,6 +21,8 @@ class PublicJobListItem(BaseModel):
     employment_type: str
     location: str | None
     is_remote: bool
+    salary_min: int | None
+    salary_max: int | None
     tags: list[PublicTagRead]
     created_at: datetime
     expires_at: datetime | None
@@ -37,6 +39,8 @@ class PublicJobRead(BaseModel):
     employment_type: str
     location: str | None
     is_remote: bool
+    salary_min: int | None
+    salary_max: int | None
     application_mode: str
     external_apply_url: str | None
     tags: list[PublicTagRead]

@@ -55,6 +55,9 @@ class Job(Base):
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_remote: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    salary_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    salary_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Application mode: "form" (built-in) or "external_url" (redirect)
     application_mode: Mapped[str] = mapped_column(
         String(20), nullable=False, default="form"

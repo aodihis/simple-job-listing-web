@@ -37,6 +37,12 @@ class JobCreate(BaseModel):
         max_length=500,
         description="Required when application_mode is 'external_url'.",
     )
+    salary_min: int | None = Field(
+        default=None, ge=0, description="Minimum salary (annual, in whole currency units). Null = not disclosed."
+    )
+    salary_max: int | None = Field(
+        default=None, ge=0, description="Maximum salary (annual, in whole currency units). Null = not disclosed."
+    )
     tags: list[str] = Field(
         default_factory=list,
         description="List of tag names (e.g. ['python', 'remote', 'senior']). Created automatically if new.",
@@ -70,6 +76,8 @@ class JobUpdate(BaseModel):
     external_apply_url: str | None = Field(
         default=None, max_length=500, description="Required when application_mode is 'external_url'."
     )
+    salary_min: int | None = Field(default=None, ge=0, description="Minimum salary.")
+    salary_max: int | None = Field(default=None, ge=0, description="Maximum salary.")
     tags: list[str] = Field(default_factory=list, description="Tag names.")
     expires_at: datetime | None = Field(default=None, description="Optional expiry date.")
 
@@ -98,6 +106,8 @@ class JobRead(BaseModel):
     employment_type: str
     location: str | None
     is_remote: bool
+    salary_min: int | None
+    salary_max: int | None
     application_mode: str
     external_apply_url: str | None
     is_active: bool
@@ -123,6 +133,8 @@ class JobListItem(BaseModel):
     employment_type: str
     location: str | None
     is_remote: bool
+    salary_min: int | None
+    salary_max: int | None
     is_active: bool
     is_deleted: bool
     tags: list[TagRead]

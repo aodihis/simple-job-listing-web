@@ -34,6 +34,8 @@ def create_job(db: Session, data: JobCreate, posted_by: AdminUser) -> Job:
         employment_type=data.employment_type.value,
         location=data.location,
         is_remote=data.is_remote,
+        salary_min=data.salary_min,
+        salary_max=data.salary_max,
         application_mode=data.application_mode.value,
         external_apply_url=data.external_apply_url,
         is_active=True,
@@ -63,6 +65,8 @@ def update_job(db: Session, public_id: str, data: JobUpdate, updated_by: AdminUs
     job.employment_type = data.employment_type.value
     job.location = data.location
     job.is_remote = data.is_remote
+    job.salary_min = data.salary_min
+    job.salary_max = data.salary_max
     job.application_mode = data.application_mode.value
     job.external_apply_url = data.external_apply_url
     job.expires_at = data.expires_at
