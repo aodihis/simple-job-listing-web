@@ -18,6 +18,7 @@
 			<a href="/jobs" class="nav-link">Jobs</a>
 			<a href="/applications" class="nav-link">Applications</a>
 			<a href="/admins" class="nav-link">Admins</a>
+			<a href="/settings" class="nav-link">Settings</a>
 		</nav>
 
 		<div class="sidebar-footer">

@@ -192,6 +192,35 @@ def send_application_confirmation(
             db.close()
 
 
+def send_test_email(to: str) -> None:
+    """
+    Send a test email to verify SMTP configuration.
+
+    Raises an exception (SMTP errors, connection errors, config errors) so the
+    caller can surface a meaningful error message to the admin.
+    """
+    settings = get_settings()
+
+    missing = [name for name in _REQUIRED_SMTP_FIELDS if not getattr(settings, name)]
+    if missing:
+        raise ValueError(f"Incomplete SMTP configuration — missing: {', '.join(missing)}")
+
+    _send_smtp(
+        smtp_host=settings.SMTP_HOST,  # type: ignore[arg-type]
+        smtp_port=settings.SMTP_PORT,
+        smtp_user=settings.SMTP_USER,  # type: ignore[arg-type]
+        smtp_password=settings.SMTP_PASSWORD,  # type: ignore[arg-type]
+        from_name=settings.SMTP_FROM_NAME,
+        to=to,
+        subject="Test email — SMTP configuration check",
+        body=(
+            "This is a test email sent from the admin dashboard.\n\n"
+            "If you received this, your SMTP configuration is working correctly."
+        ),
+    )
+    log.info("email.test_sent", to=to)
+
+
 def _send_smtp(
     *,
     smtp_host: str,
