@@ -35,8 +35,6 @@ def submit_application(
     - Checkbox values must all be within the configured options.
     - Email-type fields must contain a valid email address.
     - URL-type fields must start with http:// or https://.
-
-    The caller must db.commit() after this returns.
     """
     job = _get_open_job(db, job_public_id)
 
@@ -119,15 +117,10 @@ def update_application_status(
     public_id: str,
     new_status: ApplicationStatus,
 ) -> ApplicationRead:
-    """
-    Update the workflow status of an application.
-
-    The caller must db.commit() after this returns.
-    """
+    """Update the workflow status of an application."""
     application = _get_by_public_id(db, public_id)
     old_status = application.status
     application.status = new_status.value
-    db.flush()
 
     log.info(
         "application.status_updated",

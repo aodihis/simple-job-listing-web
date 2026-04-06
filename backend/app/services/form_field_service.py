@@ -44,8 +44,6 @@ def replace_form_fields(
 
     Strategy: delete existing rows for this job, insert the new list in order.
     This keeps the implementation simple and avoids partial-update drift.
-
-    The caller must db.commit() after this returns.
     """
     job = _get_editable_job(db, job_id, current_user)
 

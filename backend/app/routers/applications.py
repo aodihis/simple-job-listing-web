@@ -89,6 +89,4 @@ def update_status(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(require_active_admin),
 ) -> ApplicationRead:
-    result = application_service.update_application_status(db, application_id, body.status)
-    db.commit()
-    return result
+    return application_service.update_application_status(db, application_id, body.status)

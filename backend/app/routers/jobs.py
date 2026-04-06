@@ -57,8 +57,6 @@ def create_job(
     current_user: AdminUser = Depends(require_active_admin),
 ) -> JobRead:
     job = job_service.create_job(db, body, current_user)
-    db.commit()
-    db.refresh(job)
     return _build_job_read(job)
 
 
@@ -128,8 +126,6 @@ def toggle_job(
     current_user: AdminUser = Depends(require_active_admin),
 ) -> JobRead:
     job = job_service.toggle_job_active(db, job_id, current_user)
-    db.commit()
-    db.refresh(job)
     return _build_job_read(job)
 
 
@@ -145,8 +141,6 @@ def delete_job(
     current_user: AdminUser = Depends(require_active_admin),
 ) -> JobRead:
     job = job_service.delete_job(db, job_id, current_user)
-    db.commit()
-    db.refresh(job)
     return _build_job_read(job)
 
 
@@ -181,6 +175,4 @@ def replace_form_fields(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(require_active_admin),
 ) -> list[FormFieldRead]:
-    fields = form_field_service.replace_form_fields(db, job_id, body, current_user)
-    db.commit()
-    return fields
+    return form_field_service.replace_form_fields(db, job_id, body, current_user)

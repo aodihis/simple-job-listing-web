@@ -38,11 +38,12 @@ def create_job(db: Session, data: JobCreate, posted_by: AdminUser) -> Job:
         external_apply_url=data.external_apply_url,
         is_active=True,
         is_deleted=False,
-        posted_by_id=posted_by.id,
+        posted_by=posted_by,
         expires_at=data.expires_at,
         tags=tags,
     )
     db.add(job)
+    db.flush()  # populate public_id and server-default timestamps before returning
 
     log.info(
         "job.created",

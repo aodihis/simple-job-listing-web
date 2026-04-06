@@ -113,7 +113,9 @@ def configure_logging(log_level: str = "INFO", json_logs: bool = False) -> None:
 
 - Always inject the session via `Depends(get_db)` in router functions.
 - Pass `db: Session` as the **first argument** to service functions.
-- **Never `db.commit()` inside a service function.** Commit happens in the router (or a transaction helper) so the router controls transaction scope.
+- **Never call `db.commit()` or `db.rollback()` anywhere** — `get_db()` in `database.py` auto-commits on success and auto-rolls back on any unhandled exception. This keeps every request atomic without any extra code in routers or services.
+- Services stage changes with `db.add()`, `db.query()`, and `db.flush()`. Use `db.flush()` only when you need a generated ID or default value before the function returns (e.g. to populate `public_id` before building a confirmation response).
+- For multi-step operations that need internal savepoints within a single request, use `db.begin_nested()` inside the service.
 - Never modify the database schema manually. All changes go through Alembic:
   ```bash
   alembic revision --autogenerate -m "describe_the_change"

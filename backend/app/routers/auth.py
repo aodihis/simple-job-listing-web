@@ -27,8 +27,6 @@ settings = get_settings()
 )
 def register(body: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = auth_service.register_first_admin(db, body)
-    db.commit()
-    db.refresh(user)
     token = create_access_token(subject=user.public_id)
     return TokenResponse(
         access_token=token,

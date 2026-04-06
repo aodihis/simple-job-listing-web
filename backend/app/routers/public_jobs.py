@@ -125,6 +125,4 @@ def apply_for_job(
     body: ApplicationCreate,
     db: Session = Depends(get_db),
 ) -> ApplicationConfirmation:
-    result = application_service.submit_application(db, job_id, body)
-    db.commit()
-    return result
+    return application_service.submit_application(db, job_id, body)

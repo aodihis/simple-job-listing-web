@@ -34,6 +34,7 @@ def register_first_admin(db: Session, data: RegisterRequest) -> AdminUser:
         invited_by_id=None,
     )
     db.add(user)
+    db.flush()  # populate public_id before caller uses it for JWT
 
     log.info("auth.register_success", email=data.email)
     return user
