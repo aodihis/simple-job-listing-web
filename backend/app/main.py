@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.logging.config import configure_logging, get_logger
 from app.logging.middleware import RequestLoggingMiddleware
-from app.routers import auth, jobs, public_jobs
+from app.routers import applications, auth, jobs, public_jobs
 from app.utils.exceptions import AppException
 
 settings = get_settings()
@@ -57,4 +57,5 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 # Routers
 app.include_router(auth.router)
 app.include_router(jobs.router)
+app.include_router(applications.router)
 app.include_router(public_jobs.router)

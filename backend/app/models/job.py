@@ -86,6 +86,12 @@ class Job(Base):
         cascade="all, delete-orphan",
         uselist=True,
     )
+    applications = relationship(
+        "Application",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        uselist=True,
+    )
 
     def __repr__(self) -> str:
         return f"<Job id={self.id} title={self.title!r}>"

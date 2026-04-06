@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.schemas.application import ApplicationConfirmation, ApplicationCreate
 from app.schemas.form_field import FormFieldRead
 from app.schemas.public_job import PublicJobListItem, PublicJobRead, PublicPaginatedJobs
-from app.services import job_service
+from app.services import application_service, job_service
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Public — Jobs"])
 
@@ -104,3 +105,26 @@ def get_public_job(
 ) -> PublicJobRead:
     job = job_service.get_public_job(db, job_id)
     return _build_public_read(job)
+
+
+@router.post(
+    "/{job_id}/apply",
+    response_model=ApplicationConfirmation,
+    status_code=201,
+    summary="Submit a job application",
+    description=(
+        "Submit an application for a job that uses the built-in form (`application_mode='form'`). "
+        "One submission per email address per job. "
+        "Dynamic field answers must pass the job's form-field validation rules. "
+        "Returns 404 for jobs using an external URL or that are inactive/expired/deleted. "
+        "Returns 409 if the same email has already applied."
+    ),
+)
+def apply_for_job(
+    job_id: str,
+    body: ApplicationCreate,
+    db: Session = Depends(get_db),
+) -> ApplicationConfirmation:
+    result = application_service.submit_application(db, job_id, body)
+    db.commit()
+    return result

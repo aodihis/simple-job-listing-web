@@ -94,6 +94,29 @@ export interface FormFieldsUpdate {
 	fields: FormFieldCreate[];
 }
 
+// ── Applications ──────────────────────────────────────────────────────────────
+
+export type ApplicationStatus = 'new' | 'reviewed' | 'rejected' | 'hired';
+
+export interface ApplicationRead {
+	public_id: string;
+	applicant_name: string;
+	applicant_email: string;
+	responses: Record<string, string | string[]>;
+	status: ApplicationStatus;
+	created_at: string;
+	job_public_id: string;
+	job_title: string;
+}
+
+export interface PaginatedApplications {
+	items: ApplicationRead[];
+	total: number;
+	page: number;
+	per_page: number;
+	pages: number;
+}
+
 export class ApiError extends Error {
 	constructor(
 		public readonly status: number,
