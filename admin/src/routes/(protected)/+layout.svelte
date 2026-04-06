@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { clearAuth } from '$lib/utils/auth';
-	import { isAuthenticated } from '$lib/stores/auth';
-
 	function handleLogout() {
 		clearAuth();
 		goto('/login');
@@ -20,7 +18,6 @@
 			<a href="/jobs" class="nav-link">Jobs</a>
 			<a href="/applications" class="nav-link">Applications</a>
 			<a href="/admins" class="nav-link">Admins</a>
-			<a href="/settings" class="nav-link">Settings</a>
 		</nav>
 
 		<div class="sidebar-footer">

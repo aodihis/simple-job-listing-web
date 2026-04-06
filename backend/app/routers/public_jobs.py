@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.application import ApplicationConfirmation, ApplicationCreate
 from app.schemas.form_field import FormFieldRead
 from app.schemas.public_job import PublicJobListItem, PublicJobRead, PublicPaginatedJobs
-from app.services import application_service, job_service
+from app.services import application_service, email_service, job_service
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Public — Jobs"])
 
@@ -123,6 +123,12 @@ def get_public_job(
 def apply_for_job(
     job_id: str,
     body: ApplicationCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> ApplicationConfirmation:
-    return application_service.submit_application(db, job_id, body)
+    result = application_service.submit_application(db, job_id, body)
+    background_tasks.add_task(
+        email_service.send_new_application_notification,
+        application_public_id=result.public_id,
+    )
+    return result

@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     JSON_LOGS: bool = False
 
+    # Email notifications — sent as a background task on each new application
+    NOTIFICATIONS_ENABLED: bool = False
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_NOTIFICATION_TO: str | None = None
+
     @computed_field  # type: ignore[misc]
     @property
     def cors_origins_list(self) -> list[str]:

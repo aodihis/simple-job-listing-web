@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venv/Scripts/python -m pytest tests/*)"
+      "Bash(.venv/Scripts/python -m pytest tests/ -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_jobs.py::TestGetJob::test_get_returns_full_job -v --tb=long)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_jobs.py::TestGetJob::test_get_returns_full_job -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/ --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -v)"
     ]
   }
 }

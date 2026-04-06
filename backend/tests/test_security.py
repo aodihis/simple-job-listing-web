@@ -116,8 +116,9 @@ class TestDecodeToken:
 
     def test_raises_for_tampered_token(self) -> None:
         token = create_access_token("user-id")
-        # flip the last character to tamper with the signature
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        # replace the signature segment (third part) with a bogus value
+        header, payload, _ = token.split(".")
+        tampered = f"{header}.{payload}.invalidsignatureXXXXXXXXXXXX"
         with pytest.raises(UnauthorizedError):
             decode_token(tampered)
 
