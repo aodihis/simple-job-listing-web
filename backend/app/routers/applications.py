@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -84,12 +84,12 @@ def download_cv(
     application_id: str,
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(require_active_admin),
-) -> FileResponse:
-    cv_path, cv_filename = application_service.get_application_cv_path(db, application_id)
-    return FileResponse(
-        path=cv_path,
-        filename=cv_filename,
+) -> Response:
+    data, cv_filename = application_service.get_application_cv(db, application_id)
+    return Response(
+        content=data,
         media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{cv_filename}"'},
     )
 
 

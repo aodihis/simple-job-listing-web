@@ -6,12 +6,12 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.logging.config import get_logger
 from app.models.application import Application
 from app.models.form_field import JobFormField
 from app.models.job import Job
 from app.schemas.application import ApplicationCreate, ApplicationConfirmation, ApplicationRead, ApplicationStatus
+from app.storage import get_storage
 from app.utils.exceptions import BadRequestError, ConflictError, NotFoundError
 
 log = get_logger(__name__)
@@ -80,8 +80,8 @@ def submit_application(
     db.add(application)
     db.flush()  # populate application.public_id before saving CV
 
-    # Save CV to disk (after flush so we have the public_id)
-    saved_path, safe_name = _save_cv(application.public_id, cv_filename, cv_content)
+    # Upload CV via storage backend (after flush so we have the public_id)
+    saved_path, safe_name = _upload_cv(application.public_id, cv_filename, cv_content)
     application.cv_filename = safe_name
     application.cv_path = saved_path
 
@@ -273,36 +273,37 @@ def _validate_cv(filename: str, content: bytes, content_type: str) -> None:
         raise BadRequestError("CV must be a PDF, DOC, or DOCX file.")
 
 
-def _save_cv(application_public_id: str, original_filename: str, content: bytes) -> tuple[str, str]:
+def _upload_cv(application_public_id: str, original_filename: str, content: bytes) -> tuple[str, str]:
     """
-    Save CV bytes to disk under UPLOADS_DIR/cv/<application_public_id>/.
+    Upload CV bytes via the configured storage backend.
 
-    Returns (absolute_path_str, safe_filename).
+    Returns (storage_key, safe_filename).
+    The storage key is what gets persisted in ``application.cv_path``.
     """
-    settings = get_settings()
     safe_name = pathlib.Path(original_filename).name[:100]  # strip dir traversal, cap length
     ext = pathlib.Path(safe_name).suffix.lower()
     if ext not in _ALLOWED_CV_EXTENSIONS:
         safe_name = "cv.pdf"
 
-    cv_dir = pathlib.Path(settings.UPLOADS_DIR) / "cv" / application_public_id
-    cv_dir.mkdir(parents=True, exist_ok=True)
-    file_path = cv_dir / safe_name
-    file_path.write_bytes(content)
+    key = f"cv/{application_public_id}/{safe_name}"
+    get_storage().upload(key, content)
 
-    log.info("cv.saved", application_id=application_public_id, filename=safe_name)
-    return str(file_path), safe_name
+    log.info("cv.uploaded", application_id=application_public_id, key=key)
+    return key, safe_name
 
 
-def get_application_cv_path(db: Session, public_id: str) -> tuple[str, str]:
+def get_application_cv(db: Session, public_id: str) -> tuple[bytes, str]:
     """
-    Return (file_path, filename) for the CV attached to an application.
+    Return (file_bytes, filename) for the CV attached to an application.
 
-    Raises NotFoundError if the application doesn't exist or has no CV.
+    Raises NotFoundError if the application has no CV or the object is missing
+    from the storage backend.
     """
     application = _get_by_public_id(db, public_id)
     if not application.cv_path or not application.cv_filename:
         raise NotFoundError("No CV attached to this application.")
-    if not pathlib.Path(application.cv_path).exists():
-        raise NotFoundError("CV file not found on disk.")
-    return application.cv_path, application.cv_filename
+    try:
+        data = get_storage().download(application.cv_path)
+    except FileNotFoundError:
+        raise NotFoundError("CV file not found in storage.")
+    return data, application.cv_filename

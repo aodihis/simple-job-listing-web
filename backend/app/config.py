@@ -27,8 +27,19 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     JSON_LOGS: bool = False
 
-    # File uploads — CV/resume storage directory (relative to cwd or absolute)
-    UPLOADS_DIR: str = "uploads"
+    # ── File storage ───────────────────────────────────────────────────────────
+    # Which backend to use: "local" (default) or "s3"
+    STORAGE_BACKEND: str = "local"
+
+    # Local backend — directory where uploads are saved (absolute or relative to cwd)
+    STORAGE_LOCAL_DIR: str = "uploads"
+
+    # S3 backend — requires pip install -e ".[s3]"
+    STORAGE_S3_BUCKET: str | None = None
+    STORAGE_S3_REGION: str | None = None
+    STORAGE_S3_PREFIX: str = ""               # optional key prefix / folder inside the bucket
+    STORAGE_S3_ACCESS_KEY_ID: str | None = None      # omit to use IAM role / instance profile
+    STORAGE_S3_SECRET_ACCESS_KEY: str | None = None
 
     # Email notifications — sent as a background task on each new application
     NOTIFICATIONS_ENABLED: bool = False

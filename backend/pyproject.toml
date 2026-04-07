@@ -25,6 +25,10 @@ dependencies = [
 postgres = [
     "psycopg2-binary>=2.9.9,<3.0.0",
 ]
+# Install for S3 file storage: pip install -e ".[s3]"
+s3 = [
+    "boto3>=1.34.0,<2.0.0",
+]
 dev = [
     "pytest>=8.2.0,<9.0.0",
     "pytest-asyncio>=0.23.0,<0.24.0",
