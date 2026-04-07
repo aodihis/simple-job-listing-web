@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getAdminJob, updateJob } from '$lib/api/jobs';
+	import { getAdminJob, updateJob, toggleJob, deleteJob } from '$lib/api/jobs';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
 	import type { ApplicationMode, EmploymentType } from '$lib/api/types';
@@ -14,9 +14,16 @@
 
 	let isLoading = true;
 	let isSaving = false;
+	let isActioning = false;
 	let loadError = '';
 	let errorMessage = '';
 	let fieldErrors: Record<string, string> = {};
+
+	let jobIsActive = true;
+	let dropdownOpen = false;
+	let confirmAction: 'deactivate' | 'activate' | 'delete' | null = null;
+
+	$: isBusy = isSaving || isActioning;
 
 	// Form state
 	let title = '';
@@ -30,6 +37,46 @@
 	let externalApplyUrl = '';
 	let tagsInput = '';
 	let expiresAt = '';
+
+	function closeDropdown() { dropdownOpen = false; }
+
+	function requestConfirm(action: 'deactivate' | 'activate' | 'delete') {
+		dropdownOpen = false;
+		confirmAction = action;
+	}
+
+	async function handleToggle() {
+		confirmAction = null;
+		isActioning = true;
+		errorMessage = '';
+		try {
+			const updated = await toggleJob(jobId);
+			jobIsActive = updated.is_active;
+			log.info('job.toggled', { public_id: jobId, is_active: updated.is_active });
+			goto('/jobs');
+		} catch (err) {
+			errorMessage = 'Failed to update status. Please try again.';
+			log.error('job.toggle_failed', { public_id: jobId, error: String(err) });
+		} finally {
+			isActioning = false;
+		}
+	}
+
+	async function handleDelete() {
+		confirmAction = null;
+		isActioning = true;
+		errorMessage = '';
+		try {
+			await deleteJob(jobId);
+			log.info('job.deleted', { public_id: jobId });
+			goto('/jobs');
+		} catch (err) {
+			errorMessage = 'Failed to delete job. Please try again.';
+			log.error('job.delete_failed', { public_id: jobId, error: String(err) });
+		} finally {
+			isActioning = false;
+		}
+	}
 
 	onMount(async () => {
 		try {
@@ -45,6 +92,7 @@
 			expiresAt = job.expires_at ? job.expires_at.slice(0, 10) : '';
 			salaryMin = job.salary_min != null ? String(job.salary_min) : '';
 			salaryMax = job.salary_max != null ? String(job.salary_max) : '';
+			jobIsActive = job.is_active;
 			log.info('job.loaded_for_edit', { public_id: jobId });
 		} catch (err) {
 			loadError =
@@ -130,12 +178,90 @@
 		{#if !isLoading && !loadError}
 			<div class="header-actions">
 				<a href="/jobs/{jobId}/form" class="btn-secondary">Edit Form</a>
-				<button type="submit" form="edit-job-form" class="btn-primary" disabled={isSaving}>
-					{isSaving ? 'Saving…' : 'Save Changes'}
-				</button>
+
+				<!-- Split button: Save (default) + dropdown for other actions -->
+				<div class="split-btn-wrap" class:open={dropdownOpen}>
+					<button
+						type="submit"
+						form="edit-job-form"
+						class="split-main"
+						disabled={isBusy}
+					>
+						{isSaving ? 'Saving…' : 'Save Changes'}
+					</button>
+					<button
+						type="button"
+						class="split-chevron"
+						disabled={isBusy}
+						aria-label="More actions"
+						on:click={() => (dropdownOpen = !dropdownOpen)}
+					>
+						▾
+					</button>
+
+					{#if dropdownOpen}
+						<!-- svelte-ignore a11y-no-static-element-interactions -->
+						<div class="dropdown-backdrop" on:click={closeDropdown} on:keydown={closeDropdown}></div>
+						<div class="dropdown-menu" role="menu">
+							<button
+								type="button"
+								class="dropdown-item item-warning"
+								role="menuitem"
+								on:click={() => requestConfirm(jobIsActive ? 'deactivate' : 'activate')}
+							>
+								{jobIsActive ? '⏸ Deactivate post' : '▶ Activate post'}
+							</button>
+							<div class="dropdown-divider"></div>
+							<button
+								type="button"
+								class="dropdown-item item-danger"
+								role="menuitem"
+								on:click={() => requestConfirm('delete')}
+							>
+								🗑 Delete post
+							</button>
+						</div>
+					{/if}
+				</div>
 			</div>
 		{/if}
 	</div>
+
+	<!-- Confirmation modal -->
+	{#if confirmAction}
+		<div class="modal-backdrop" role="dialog" aria-modal="true">
+			<div class="modal">
+				{#if confirmAction === 'delete'}
+					<h2 class="modal-title danger">Delete this post?</h2>
+					<p class="modal-body">This is permanent and cannot be undone. All applications for this job will also be removed.</p>
+					<div class="modal-actions">
+						<button type="button" class="btn-ghost" on:click={() => (confirmAction = null)}>Cancel</button>
+						<button type="button" class="btn-danger" disabled={isActioning} on:click={handleDelete}>
+							{isActioning ? 'Deleting…' : 'Yes, delete'}
+						</button>
+					</div>
+				{:else if confirmAction === 'deactivate'}
+					<h2 class="modal-title warning">Deactivate this post?</h2>
+					<p class="modal-body">The listing will be hidden from candidates immediately. You can reactivate it at any time.</p>
+					<div class="modal-actions">
+						<button type="button" class="btn-ghost" on:click={() => (confirmAction = null)}>Cancel</button>
+						<button type="button" class="btn-warning" disabled={isActioning} on:click={handleToggle}>
+							{isActioning ? 'Deactivating…' : 'Yes, deactivate'}
+						</button>
+					</div>
+				{:else if confirmAction === 'activate'}
+					<h2 class="modal-title">Activate this post?</h2>
+					<p class="modal-body">The listing will become visible to candidates again.</p>
+					<div class="modal-actions">
+						<button type="button" class="btn-ghost" on:click={() => (confirmAction = null)}>Cancel</button>
+						<button type="button" class="btn-primary" disabled={isActioning} on:click={handleToggle}>
+							{isActioning ? 'Activating…' : 'Yes, activate'}
+						</button>
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
 
 	{#if isLoading}
 		<p class="loading">Loading…</p>
@@ -462,20 +588,188 @@
 	.radio-label strong { display: block; font-size: 0.9rem; }
 	.radio-label p { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--color-text-muted); }
 
+	/* ── Split button ── */
+	.split-btn-wrap {
+		position: relative;
+		display: flex;
+	}
+
+	.split-main {
+		padding: 0.55rem 1rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-right: 1px solid rgba(255,255,255,0.25);
+		border-radius: var(--radius) 0 0 var(--radius);
+		font-size: 0.95rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s;
+		white-space: nowrap;
+	}
+
+	.split-main:hover:not(:disabled) { background: var(--color-primary-hover); }
+	.split-main:disabled { opacity: 0.7; cursor: not-allowed; }
+
+	.split-chevron {
+		padding: 0.55rem 0.6rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: 0 var(--radius) var(--radius) 0;
+		font-size: 0.8rem;
+		cursor: pointer;
+		transition: background 0.15s;
+		line-height: 1;
+	}
+
+	.split-chevron:hover:not(:disabled) { background: var(--color-primary-hover); }
+	.split-chevron:disabled { opacity: 0.7; cursor: not-allowed; }
+
+	/* ── Dropdown ── */
+	.dropdown-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 10;
+	}
+
+	.dropdown-menu {
+		position: absolute;
+		top: calc(100% + 0.35rem);
+		right: 0;
+		z-index: 11;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+		min-width: 180px;
+		padding: 0.35rem 0;
+	}
+
+	.dropdown-item {
+		display: block;
+		width: 100%;
+		padding: 0.55rem 1rem;
+		background: none;
+		border: none;
+		text-align: left;
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: background 0.1s;
+		color: var(--color-text);
+	}
+
+	.dropdown-item:hover { background: var(--color-bg); }
+
+	.dropdown-item.item-warning { color: #b45309; }
+	.dropdown-item.item-danger  { color: var(--color-danger); }
+
+	.dropdown-divider {
+		height: 1px;
+		background: var(--color-border);
+		margin: 0.35rem 0;
+	}
+
+	/* ── Confirmation modal ── */
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		background: rgba(0,0,0,0.4);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+	}
+
+	.modal {
+		background: var(--color-surface);
+		border-radius: var(--radius);
+		padding: 1.5rem;
+		max-width: 420px;
+		width: 100%;
+		box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+	}
+
+	.modal-title {
+		margin: 0 0 0.75rem;
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+
+	.modal-title.danger  { color: var(--color-danger); }
+	.modal-title.warning { color: #b45309; }
+
+	.modal-body {
+		margin: 0 0 1.25rem;
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+
 	.btn-primary {
-		padding: 0.55rem 1.25rem;
+		padding: 0.5rem 1.1rem;
 		background: var(--color-primary);
 		color: white;
 		border: none;
 		border-radius: var(--radius);
-		font-size: 0.95rem;
+		font-size: 0.9rem;
 		font-weight: 500;
-		transition: background 0.15s;
 		cursor: pointer;
+		transition: background 0.15s;
 	}
 
 	.btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
 	.btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+	.btn-danger {
+		padding: 0.5rem 1.1rem;
+		background: var(--color-danger);
+		color: white;
+		border: none;
+		border-radius: var(--radius);
+		font-size: 0.9rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.btn-danger:hover:not(:disabled) { opacity: 0.88; }
+	.btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.btn-warning {
+		padding: 0.5rem 1.1rem;
+		background: #d97706;
+		color: white;
+		border: none;
+		border-radius: var(--radius);
+		font-size: 0.9rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.btn-warning:hover:not(:disabled) { opacity: 0.88; }
+	.btn-warning:disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.btn-ghost {
+		padding: 0.5rem 1.1rem;
+		background: none;
+		color: var(--color-text-muted);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		font-size: 0.9rem;
+		cursor: pointer;
+		transition: border-color 0.15s;
+	}
+
+	.btn-ghost:hover { border-color: var(--color-text-muted); }
 
 	.btn-secondary {
 		padding: 0.55rem 1.25rem;

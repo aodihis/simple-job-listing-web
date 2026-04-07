@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -72,6 +73,24 @@ def get_application(
     current_user: AdminUser = Depends(require_active_admin),
 ) -> ApplicationRead:
     return application_service.get_application(db, application_id)
+
+
+@router.get(
+    "/{application_id}/cv",
+    summary="Download application CV (admin)",
+    description="Stream the CV file attached to an application. Returns 404 if no CV was uploaded.",
+)
+def download_cv(
+    application_id: str,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(require_active_admin),
+) -> FileResponse:
+    cv_path, cv_filename = application_service.get_application_cv_path(db, application_id)
+    return FileResponse(
+        path=cv_path,
+        filename=cv_filename,
+        media_type="application/octet-stream",
+    )
 
 
 @router.patch(

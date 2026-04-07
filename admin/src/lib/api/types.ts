@@ -125,6 +125,7 @@ export interface ApplicationRead {
 	created_at: string;
 	job_public_id: string;
 	job_title: string;
+	cv_filename: string | null;
 }
 
 export interface PaginatedApplications {

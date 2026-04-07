@@ -31,6 +31,10 @@ class Application(Base):
         "responses_json", Text, nullable=False, default="{}"
     )
 
+    # CV / resume upload
+    cv_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cv_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
     # Workflow status: new → reviewed → rejected | hired
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="new")
 

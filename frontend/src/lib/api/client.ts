@@ -40,4 +40,12 @@ export const api = {
 
 	post: <T>(path: string, body: unknown) =>
 		apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+
+	/** For multipart/form-data — Content-Type is NOT set so the browser includes the boundary. */
+	postFormData: <T>(path: string, body: FormData) =>
+		apiFetch<T>(path, {
+			method: 'POST',
+			body,
+			headers: {}, // override default Content-Type: application/json
+		}),
 };

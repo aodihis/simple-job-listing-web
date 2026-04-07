@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+import json
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +10,7 @@ from app.schemas.application import ApplicationConfirmation, ApplicationCreate
 from app.schemas.form_field import FormFieldRead
 from app.schemas.public_job import PublicJobListItem, PublicJobRead, PublicPaginatedJobs
 from app.services import application_service, email_service, job_service
+from app.utils.exceptions import BadRequestError
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Public — Jobs"])
 
@@ -118,19 +121,49 @@ def get_public_job(
     summary="Submit a job application",
     description=(
         "Submit an application for a job that uses the built-in form (`application_mode='form'`). "
+        "Accepts multipart/form-data with applicant details, optional form responses (JSON string), "
+        "and a required CV file (PDF, DOC, or DOCX, max 10 MB). "
         "One submission per email address per job. "
-        "Dynamic field answers must pass the job's form-field validation rules. "
         "Returns 404 for jobs using an external URL or that are inactive/expired/deleted. "
         "Returns 409 if the same email has already applied."
     ),
 )
 def apply_for_job(
     job_id: str,
-    body: ApplicationCreate,
     background_tasks: BackgroundTasks,
+    applicant_name: str = Form(..., min_length=1, max_length=200, description="Full name of the applicant."),
+    applicant_email: str = Form(..., description="Applicant's email address."),
+    responses_json: str = Form(
+        default="{}",
+        description=(
+            "JSON-encoded dict mapping form field IDs (as strings) to answers. "
+            "Single-choice fields use a string value; checkbox fields use a JSON array."
+        ),
+    ),
+    cv_file: UploadFile = File(..., description="CV/resume file. Must be PDF, DOC, or DOCX. Max 10 MB."),
     db: Session = Depends(get_db),
 ) -> ApplicationConfirmation:
-    result = application_service.submit_application(db, job_id, body)
+    try:
+        responses: dict[str, str | list[str]] = json.loads(responses_json)
+    except json.JSONDecodeError:
+        raise BadRequestError("responses_json must be a valid JSON object.")
+
+    data = ApplicationCreate(
+        applicant_name=applicant_name,
+        applicant_email=applicant_email,
+        responses=responses,
+    )
+
+    cv_content = cv_file.file.read()
+
+    result = application_service.submit_application(
+        db,
+        job_id,
+        data,
+        cv_filename=cv_file.filename or "cv",
+        cv_content=cv_content,
+        cv_content_type=cv_file.content_type or "",
+    )
     background_tasks.add_task(
         email_service.send_new_application_notification,
         application_public_id=result.public_id,

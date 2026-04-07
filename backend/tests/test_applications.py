@@ -1,10 +1,18 @@
 """
 Tests for POST /api/v1/jobs/{id}/apply — public application submission.
 Covers happy path, field validation, duplicate prevention, and job-state guards.
+
+The apply endpoint now accepts multipart/form-data:
+  - applicant_name  (form field)
+  - applicant_email (form field)
+  - responses_json  (form field, JSON-encoded dict, default "{}")
+  - cv_file         (file upload, required, PDF/DOC/DOCX ≤ 10 MB)
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,11 +39,30 @@ BASE_JOB = {
     "expires_at": None,
 }
 
-APPLICANT = {
-    "applicant_name": "Jane Doe",
-    "applicant_email": "jane@example.com",
-    "responses": {},
-}
+# Minimal valid PDF bytes (not a real PDF but accepted by content-type)
+_FAKE_PDF = b"%PDF-1.4 fake"
+_FAKE_DOCX = b"PK fake docx"
+
+
+def _apply(
+    client: TestClient,
+    job_public_id: str,
+    *,
+    name: str = "Jane Doe",
+    email: str = "jane@example.com",
+    responses: dict | None = None,
+    cv_bytes: bytes = _FAKE_PDF,
+    cv_filename: str = "cv.pdf",
+    cv_content_type: str = "application/pdf",
+) -> "Response":  # type: ignore[name-defined]
+    """Helper: POST a multipart application."""
+    data = {
+        "applicant_name": name,
+        "applicant_email": email,
+        "responses_json": json.dumps(responses or {}),
+    }
+    files = {"cv_file": (cv_filename, BytesIO(cv_bytes), cv_content_type)}
+    return client.post(f"/api/v1/jobs/{job_public_id}/apply", data=data, files=files)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -58,13 +85,14 @@ def apply_url(job_public_id: str) -> str:
     return f"/api/v1/jobs/{job_public_id}/apply"
 
 
-def set_form_fields(client: TestClient, headers: dict, job_id: str, fields: list) -> None:
+def set_form_fields(client: TestClient, headers: dict, job_id: str, fields: list) -> list:
     resp = client.put(
         f"{ADMIN_JOBS_URL}/{job_id}/form-fields",
         json={"fields": fields},
         headers=headers,
     )
     assert resp.status_code == 200
+    return resp.json()
 
 
 # ── Happy path ────────────────────────────────────────────────────────────────
@@ -73,7 +101,7 @@ class TestSubmitApplication:
     def test_submit_with_no_form_fields_returns_201(
         self, client: TestClient, job: dict
     ) -> None:
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 201
         body = resp.json()
         assert "public_id" in body
@@ -82,69 +110,98 @@ class TestSubmitApplication:
     def test_submit_stores_lowercase_email(
         self, client: TestClient, job: dict
     ) -> None:
-        payload = {**APPLICANT, "applicant_email": "Jane@Example.COM"}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], email="Jane@Example.COM")
         assert resp.status_code == 201
 
     def test_submit_with_text_field(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Cover letter", "field_type": "textarea",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Cover letter", "field_type": "textarea", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "I am very motivated."}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "I am very motivated."})
         assert resp.status_code == 201
 
     def test_submit_with_radio_field(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Experience", "field_type": "radio",
-                               "is_required": True,
-                               "options": ["0-1 years", "2-5 years", "5+ years"]}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Experience", "field_type": "radio", "is_required": True,
+              "options": ["0-1 years", "2-5 years", "5+ years"]}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "2-5 years"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "2-5 years"})
         assert resp.status_code == 201
 
     def test_submit_with_checkbox_field(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Skills", "field_type": "checkbox",
-                               "is_required": False,
-                               "options": ["Python", "Go", "Rust"]}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Skills", "field_type": "checkbox", "is_required": False,
+              "options": ["Python", "Go", "Rust"]}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: ["Python", "Rust"]}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: ["Python", "Rust"]})
         assert resp.status_code == 201
 
     def test_optional_field_can_be_omitted(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Portfolio URL", "field_type": "url",
-                               "is_required": False, "options": []}]},
-            headers=auth_headers,
+        set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Portfolio URL", "field_type": "url", "is_required": False, "options": []}],
         )
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 201
 
     def test_no_auth_required(self, client: TestClient, job: dict) -> None:
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 201
+
+    def test_docx_cv_accepted(self, client: TestClient, job: dict) -> None:
+        resp = _apply(
+            client, job["public_id"],
+            cv_bytes=_FAKE_DOCX,
+            cv_filename="cv.docx",
+            cv_content_type=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        )
+        assert resp.status_code == 201
+
+
+# ── CV validation ─────────────────────────────────────────────────────────────
+
+class TestCvValidation:
+    def test_missing_cv_returns_422(self, client: TestClient, job: dict) -> None:
+        """Endpoint requires cv_file — omitting it yields 422."""
+        data = {"applicant_name": "Jane", "applicant_email": "jane@example.com", "responses_json": "{}"}
+        resp = client.post(apply_url(job["public_id"]), data=data)
+        assert resp.status_code == 422
+
+    def test_empty_cv_returns_400(self, client: TestClient, job: dict) -> None:
+        resp = _apply(client, job["public_id"], cv_bytes=b"", cv_filename="cv.pdf")
+        assert resp.status_code == 400
+
+    def test_oversized_cv_returns_400(self, client: TestClient, job: dict) -> None:
+        big = b"x" * (10 * 1024 * 1024 + 1)
+        resp = _apply(client, job["public_id"], cv_bytes=big)
+        assert resp.status_code == 400
+
+    def test_invalid_extension_and_content_type_returns_400(
+        self, client: TestClient, job: dict
+    ) -> None:
+        resp = _apply(
+            client, job["public_id"],
+            cv_bytes=b"plain text",
+            cv_filename="cv.txt",
+            cv_content_type="text/plain",
+        )
+        assert resp.status_code == 400
 
 
 # ── Duplicate prevention ──────────────────────────────────────────────────────
@@ -153,22 +210,20 @@ class TestDuplicateApplication:
     def test_second_submission_same_email_returns_409(
         self, client: TestClient, job: dict
     ) -> None:
-        client.post(apply_url(job["public_id"]), json=APPLICANT)
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        _apply(client, job["public_id"])
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 409
 
     def test_duplicate_check_is_case_insensitive(
         self, client: TestClient, job: dict
     ) -> None:
-        client.post(apply_url(job["public_id"]), json=APPLICANT)
-        payload = {**APPLICANT, "applicant_email": "JANE@EXAMPLE.COM"}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        _apply(client, job["public_id"], email="jane@example.com")
+        resp = _apply(client, job["public_id"], email="JANE@EXAMPLE.COM")
         assert resp.status_code == 409
 
     def test_different_email_can_apply(self, client: TestClient, job: dict) -> None:
-        client.post(apply_url(job["public_id"]), json=APPLICANT)
-        payload = {**APPLICANT, "applicant_email": "other@example.com"}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        _apply(client, job["public_id"], email="jane@example.com")
+        resp = _apply(client, job["public_id"], email="other@example.com")
         assert resp.status_code == 201
 
 
@@ -179,14 +234,14 @@ class TestJobStateGuards:
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
         client.patch(f"{ADMIN_JOBS_URL}/{job['public_id']}/toggle", headers=auth_headers)
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 404
 
     def test_deleted_job_returns_404(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
         client.delete(f"{ADMIN_JOBS_URL}/{job['public_id']}", headers=auth_headers)
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 404
 
     def test_expired_job_returns_404(
@@ -199,11 +254,11 @@ class TestJobStateGuards:
             headers=auth_headers,
         )
         expired_job = resp.json()
-        resp = client.post(apply_url(expired_job["public_id"]), json=APPLICANT)
+        resp = _apply(client, expired_job["public_id"])
         assert resp.status_code == 404
 
     def test_unknown_job_returns_404(self, client: TestClient) -> None:
-        resp = client.post(apply_url("no-such-id"), json=APPLICANT)
+        resp = _apply(client, "no-such-id")
         assert resp.status_code == 404
 
     def test_external_url_job_returns_404(
@@ -219,7 +274,7 @@ class TestJobStateGuards:
             headers=auth_headers,
         )
         ext_job = resp.json()
-        resp = client.post(apply_url(ext_job["public_id"]), json=APPLICANT)
+        resp = _apply(client, ext_job["public_id"])
         assert resp.status_code == 404
 
 
@@ -227,31 +282,23 @@ class TestJobStateGuards:
 
 class TestApplicantDataValidation:
     def test_missing_name_returns_422(self, client: TestClient, job: dict) -> None:
-        resp = client.post(
-            apply_url(job["public_id"]),
-            json={"applicant_email": "x@x.com", "responses": {}},
-        )
+        data = {"applicant_email": "x@x.com", "responses_json": "{}"}
+        files = {"cv_file": ("cv.pdf", BytesIO(_FAKE_PDF), "application/pdf")}
+        resp = client.post(apply_url(job["public_id"]), data=data, files=files)
         assert resp.status_code == 422
 
     def test_empty_name_returns_422(self, client: TestClient, job: dict) -> None:
-        resp = client.post(
-            apply_url(job["public_id"]),
-            json={**APPLICANT, "applicant_name": ""},
-        )
+        resp = _apply(client, job["public_id"], name="")
         assert resp.status_code == 422
 
     def test_invalid_email_returns_422(self, client: TestClient, job: dict) -> None:
-        resp = client.post(
-            apply_url(job["public_id"]),
-            json={**APPLICANT, "applicant_email": "not-an-email"},
-        )
+        resp = _apply(client, job["public_id"], email="not-an-email")
         assert resp.status_code == 422
 
     def test_missing_email_returns_422(self, client: TestClient, job: dict) -> None:
-        resp = client.post(
-            apply_url(job["public_id"]),
-            json={"applicant_name": "Jane", "responses": {}},
-        )
+        data = {"applicant_name": "Jane", "responses_json": "{}"}
+        files = {"cv_file": ("cv.pdf", BytesIO(_FAKE_PDF), "application/pdf")}
+        resp = client.post(apply_url(job["public_id"]), data=data, files=files)
         assert resp.status_code == 422
 
 
@@ -261,154 +308,122 @@ class TestFieldResponseValidation:
     def test_required_text_field_missing_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Why us?", "field_type": "text",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
+        set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Why us?", "field_type": "text", "is_required": True, "options": []}],
         )
-        resp = client.post(apply_url(job["public_id"]), json=APPLICANT)
+        resp = _apply(client, job["public_id"])
         assert resp.status_code == 400
 
     def test_required_text_field_blank_string_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Why us?", "field_type": "text",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Why us?", "field_type": "text", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "   "}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "   "})
         assert resp.status_code == 400
 
     def test_radio_invalid_option_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Level", "field_type": "radio",
-                               "is_required": True,
-                               "options": ["Junior", "Senior"]}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Level", "field_type": "radio", "is_required": True,
+              "options": ["Junior", "Senior"]}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "Mid"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "Mid"})
         assert resp.status_code == 400
 
     def test_select_invalid_option_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Team", "field_type": "select",
-                               "is_required": True,
-                               "options": ["Frontend", "Backend"]}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Team", "field_type": "select", "is_required": True,
+              "options": ["Frontend", "Backend"]}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "DevOps"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "DevOps"})
         assert resp.status_code == 400
 
     def test_checkbox_invalid_option_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Tools", "field_type": "checkbox",
-                               "is_required": True,
-                               "options": ["Git", "Docker"]}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Tools", "field_type": "checkbox", "is_required": True,
+              "options": ["Git", "Docker"]}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: ["Git", "Kubernetes"]}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: ["Git", "Kubernetes"]})
         assert resp.status_code == 400
 
     def test_email_field_invalid_value_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "LinkedIn email", "field_type": "email",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "LinkedIn email", "field_type": "email", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "not-an-email"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "not-an-email"})
         assert resp.status_code == 400
 
     def test_url_field_invalid_value_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Portfolio", "field_type": "url",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Portfolio", "field_type": "url", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "not-a-url"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "not-a-url"})
         assert resp.status_code == 400
 
     def test_url_field_valid_https_accepted(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Portfolio", "field_type": "url",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Portfolio", "field_type": "url", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "https://portfolio.dev"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "https://portfolio.dev"})
         assert resp.status_code == 201
 
     def test_number_field_non_numeric_returns_400(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Years exp.", "field_type": "number",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Years exp.", "field_type": "number", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "lots"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "lots"})
         assert resp.status_code == 400
 
     def test_number_field_valid_numeric_string_accepted(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Years exp.", "field_type": "number",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Years exp.", "field_type": "number", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "4.5"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "4.5"})
         assert resp.status_code == 201
 
     def test_email_field_valid_email_accepted(
         self, client: TestClient, auth_headers: dict, job: dict
     ) -> None:
-        fields = client.put(
-            f"{ADMIN_JOBS_URL}/{job['public_id']}/form-fields",
-            json={"fields": [{"label": "Alt email", "field_type": "email",
-                               "is_required": True, "options": []}]},
-            headers=auth_headers,
-        ).json()
+        fields = set_form_fields(
+            client, auth_headers, job["public_id"],
+            [{"label": "Alt email", "field_type": "email", "is_required": True, "options": []}],
+        )
         field_id = str(fields[0]["id"])
-        payload = {**APPLICANT, "responses": {field_id: "alt@example.com"}}
-        resp = client.post(apply_url(job["public_id"]), json=payload)
+        resp = _apply(client, job["public_id"], responses={field_id: "alt@example.com"})
         assert resp.status_code == 201

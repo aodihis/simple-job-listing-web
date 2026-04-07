@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     JSON_LOGS: bool = False
 
+    # File uploads — CV/resume storage directory (relative to cwd or absolute)
+    UPLOADS_DIR: str = "uploads"
+
     # Email notifications — sent as a background task on each new application
     NOTIFICATIONS_ENABLED: bool = False
     SMTP_HOST: str | None = None

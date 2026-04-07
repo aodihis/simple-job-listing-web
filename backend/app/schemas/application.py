@@ -52,5 +52,6 @@ class ApplicationRead(BaseModel):
     created_at: datetime
     job_public_id: str
     job_title: str
+    cv_filename: str | None = None
 
     model_config = {"from_attributes": True}

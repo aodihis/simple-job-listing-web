@@ -22,6 +22,7 @@
 	let applicantEmail = '';
 	// responses keyed by string(field.id)
 	let responses: Record<string, string | string[]> = {};
+	let cvFile: File | null = null;
 
 	let isSubmitting = false;
 	let submitError = '';
@@ -88,6 +89,10 @@
 			fieldErrors['_email'] = 'Please enter a valid email address.';
 			valid = false;
 		}
+		if (!cvFile) {
+			fieldErrors['_cv'] = 'Please attach your CV (PDF, DOC, or DOCX).';
+			valid = false;
+		}
 
 		if (!job) return false;
 
@@ -112,15 +117,19 @@
 	// ── Submit ────────────────────────────────────────────────────────────────
 	async function handleSubmit() {
 		submitError = '';
-		if (!validate() || !job) return;
+		if (!validate() || !job || !cvFile) return;
 
 		isSubmitting = true;
 		try {
-			const result = await submitApplication(publicId, {
-				applicant_name: applicantName.trim(),
-				applicant_email: applicantEmail.trim(),
-				responses,
-			});
+			const result = await submitApplication(
+				publicId,
+				{
+					applicant_name: applicantName.trim(),
+					applicant_email: applicantEmail.trim(),
+					responses,
+				},
+				cvFile,
+			);
 			confirmationId = result.public_id;
 			submitted = true;
 			log.info('application.submitted', { job_id: publicId, confirmation: result.public_id });
@@ -223,6 +232,36 @@
 					/>
 					{#if fieldErrors['_email']}
 						<span class="field-error">{fieldErrors['_email']}</span>
+					{/if}
+				</div>
+
+				<div class="field">
+					<label for="cv-upload">CV / Resume <span class="required">*</span></label>
+					<div class="file-input-wrap" class:invalid={fieldErrors['_cv']}>
+						<label for="cv-upload" class="file-label" class:disabled={isSubmitting}>
+							{#if cvFile}
+								<span class="file-icon">📄</span>
+								<span class="file-name">{cvFile.name}</span>
+								<span class="file-change">Change</span>
+							{:else}
+								<span class="file-icon">📎</span>
+								<span class="file-placeholder">Choose file…</span>
+							{/if}
+						</label>
+						<input
+							id="cv-upload"
+							type="file"
+							accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+							disabled={isSubmitting}
+							on:change={(e) => {
+								const files = e.currentTarget.files;
+								cvFile = files && files.length > 0 ? files[0] : null;
+							}}
+						/>
+					</div>
+					<span class="field-hint">PDF, DOC, or DOCX · Max 10 MB</span>
+					{#if fieldErrors['_cv']}
+						<span class="field-error">{fieldErrors['_cv']}</span>
 					{/if}
 				</div>
 			</div>
@@ -475,6 +514,48 @@
 	input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
 	textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+
+	/* File upload */
+	.file-input-wrap {
+		position: relative;
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		overflow: hidden;
+	}
+	.file-input-wrap.invalid { border-color: #e53e3e; }
+
+	.file-input-wrap input[type='file'] {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		cursor: pointer;
+		width: 100%;
+		height: 100%;
+	}
+	.file-input-wrap input[type='file']:disabled { cursor: not-allowed; }
+
+	.file-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		background: white;
+		cursor: pointer;
+		font-size: 0.95rem;
+		min-height: 2.5rem;
+		user-select: none;
+	}
+	.file-label.disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.file-icon { font-style: normal; flex-shrink: 0; }
+	.file-placeholder { color: #a0aec0; }
+	.file-name { flex: 1; color: #2d3748; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.file-change { margin-left: auto; font-size: 0.8rem; color: #3b82f6; flex-shrink: 0; }
+
+	.field-hint {
+		font-size: 0.78rem;
+		color: #a0aec0;
+	}
 
 	/* Radio / Checkbox groups */
 	.radio-group,

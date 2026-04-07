@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { getApplication, updateApplicationStatus } from '$lib/api/applications';
+	import { getApplication, updateApplicationStatus, downloadApplicationCv } from '$lib/api/applications';
 	import { getFormFields } from '$lib/api/formFields';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
@@ -24,6 +24,8 @@
 	let isLoading = true;
 	let isUpdatingStatus = false;
 	let statusSuccess = false;
+	let isDownloadingCv = false;
+	let cvDownloadError = '';
 
 	$: publicId = $page.params.id;
 
@@ -44,6 +46,20 @@
 			log.error('application.load_failed', { public_id: publicId, error: String(err) });
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	async function handleCvDownload() {
+		if (!application?.cv_filename) return;
+		isDownloadingCv = true;
+		cvDownloadError = '';
+		try {
+			await downloadApplicationCv(publicId, application.cv_filename);
+		} catch (err) {
+			cvDownloadError = 'Failed to download CV. Please try again.';
+			log.error('application.cv_download_failed', { public_id: publicId, error: String(err) });
+		} finally {
+			isDownloadingCv = false;
 		}
 	}
 
@@ -161,6 +177,24 @@
 							</button>
 						{/each}
 					</div>
+				</section>
+
+				<section class="card">
+					<h2 class="card-title">CV / Resume</h2>
+					{#if application.cv_filename}
+						{#if cvDownloadError}
+							<p class="cv-error">{cvDownloadError}</p>
+						{/if}
+						<button
+							class="cv-download-btn"
+							disabled={isDownloadingCv}
+							on:click={handleCvDownload}
+						>
+							{isDownloadingCv ? 'Downloading…' : '⬇ ' + application.cv_filename}
+						</button>
+					{:else}
+						<p class="muted">No CV attached.</p>
+					{/if}
 				</section>
 
 				<section class="card meta-card">

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pathlib
 import re
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.logging.config import get_logger
 from app.models.application import Application
 from app.models.form_field import JobFormField
@@ -17,11 +19,23 @@ log = get_logger(__name__)
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _URL_RE = re.compile(r"^https?://\S+$")
 
+_MAX_CV_BYTES = 10 * 1024 * 1024  # 10 MB
+_ALLOWED_CV_EXTENSIONS = {".pdf", ".doc", ".docx"}
+_ALLOWED_CV_CONTENT_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
 
 def submit_application(
     db: Session,
     job_public_id: str,
     data: ApplicationCreate,
+    *,
+    cv_filename: str,
+    cv_content: bytes,
+    cv_content_type: str,
 ) -> ApplicationConfirmation:
     """
     Validate and persist a new application for a job.
@@ -35,6 +49,7 @@ def submit_application(
     - Checkbox values must all be within the configured options.
     - Email-type fields must contain a valid email address.
     - URL-type fields must start with http:// or https://.
+    - CV must be a PDF, DOC, or DOCX file no larger than 10 MB.
     """
     job = _get_open_job(db, job_public_id)
 
@@ -50,6 +65,9 @@ def submit_application(
     if existing:
         raise ConflictError("You have already submitted an application for this job.")
 
+    # Validate CV file before touching the DB
+    _validate_cv(cv_filename, cv_content, cv_content_type)
+
     # Validate dynamic field responses
     _validate_responses(job.form_fields, data.responses)
 
@@ -60,7 +78,12 @@ def submit_application(
     )
     application.responses = data.responses
     db.add(application)
-    db.flush()  # populate application.public_id before returning
+    db.flush()  # populate application.public_id before saving CV
+
+    # Save CV to disk (after flush so we have the public_id)
+    saved_path, safe_name = _save_cv(application.public_id, cv_filename, cv_content)
+    application.cv_filename = safe_name
+    application.cv_path = saved_path
 
     log.info(
         "application.submitted",
@@ -235,4 +258,51 @@ def _to_read(application: Application) -> ApplicationRead:
         created_at=application.created_at,
         job_public_id=application.job.public_id,
         job_title=application.job.title,
+        cv_filename=application.cv_filename,
     )
+
+
+def _validate_cv(filename: str, content: bytes, content_type: str) -> None:
+    """Raise BadRequestError if the CV file fails validation."""
+    if not content:
+        raise BadRequestError("CV file cannot be empty.")
+    if len(content) > _MAX_CV_BYTES:
+        raise BadRequestError("CV file must be smaller than 10 MB.")
+    ext = pathlib.Path(filename).suffix.lower()
+    if ext not in _ALLOWED_CV_EXTENSIONS and content_type not in _ALLOWED_CV_CONTENT_TYPES:
+        raise BadRequestError("CV must be a PDF, DOC, or DOCX file.")
+
+
+def _save_cv(application_public_id: str, original_filename: str, content: bytes) -> tuple[str, str]:
+    """
+    Save CV bytes to disk under UPLOADS_DIR/cv/<application_public_id>/.
+
+    Returns (absolute_path_str, safe_filename).
+    """
+    settings = get_settings()
+    safe_name = pathlib.Path(original_filename).name[:100]  # strip dir traversal, cap length
+    ext = pathlib.Path(safe_name).suffix.lower()
+    if ext not in _ALLOWED_CV_EXTENSIONS:
+        safe_name = "cv.pdf"
+
+    cv_dir = pathlib.Path(settings.UPLOADS_DIR) / "cv" / application_public_id
+    cv_dir.mkdir(parents=True, exist_ok=True)
+    file_path = cv_dir / safe_name
+    file_path.write_bytes(content)
+
+    log.info("cv.saved", application_id=application_public_id, filename=safe_name)
+    return str(file_path), safe_name
+
+
+def get_application_cv_path(db: Session, public_id: str) -> tuple[str, str]:
+    """
+    Return (file_path, filename) for the CV attached to an application.
+
+    Raises NotFoundError if the application doesn't exist or has no CV.
+    """
+    application = _get_by_public_id(db, public_id)
+    if not application.cv_path or not application.cv_filename:
+        raise NotFoundError("No CV attached to this application.")
+    if not pathlib.Path(application.cv_path).exists():
+        raise NotFoundError("CV file not found on disk.")
+    return application.cv_path, application.cv_filename
