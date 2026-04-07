@@ -24,6 +24,8 @@
 	let employmentType: EmploymentType = 'full_time';
 	let location = '';
 	let isRemote = false;
+	let salaryMin = '';
+	let salaryMax = '';
 	let applicationMode: ApplicationMode = 'form';
 	let externalApplyUrl = '';
 	let tagsInput = '';
@@ -41,6 +43,8 @@
 			externalApplyUrl = job.external_apply_url ?? '';
 			tagsInput = job.tags.map((t) => t.name).join(', ');
 			expiresAt = job.expires_at ? job.expires_at.slice(0, 10) : '';
+			salaryMin = job.salary_min != null ? String(job.salary_min) : '';
+			salaryMax = job.salary_max != null ? String(job.salary_max) : '';
 			log.info('job.loaded_for_edit', { public_id: jobId });
 		} catch (err) {
 			loadError =
@@ -66,6 +70,13 @@
 		if (externalApplyUrl && !/^https?:\/\/.+/.test(externalApplyUrl)) {
 			fieldErrors['externalApplyUrl'] = 'Must start with http:// or https://'; valid = false;
 		}
+		const minVal = salaryMin !== '' ? parseInt(salaryMin, 10) : null;
+		const maxVal = salaryMax !== '' ? parseInt(salaryMax, 10) : null;
+		if (minVal !== null && minVal < 0) { fieldErrors['salaryMin'] = 'Salary cannot be negative.'; valid = false; }
+		if (maxVal !== null && maxVal < 0) { fieldErrors['salaryMax'] = 'Salary cannot be negative.'; valid = false; }
+		if (minVal !== null && maxVal !== null && maxVal < minVal) {
+			fieldErrors['salaryMax'] = 'Maximum must be greater than or equal to minimum.'; valid = false;
+		}
 		return valid;
 	}
 
@@ -83,6 +94,8 @@
 				employment_type: employmentType,
 				location: location.trim() || null,
 				is_remote: isRemote,
+				salary_min: salaryMin !== '' ? parseInt(salaryMin, 10) : null,
+				salary_max: salaryMax !== '' ? parseInt(salaryMax, 10) : null,
 				application_mode: applicationMode,
 				external_apply_url: applicationMode === 'external_url' ? externalApplyUrl.trim() : null,
 				tags,
@@ -174,6 +187,40 @@
 						/>
 					</div>
 				</div>
+
+				<div class="field-row">
+					<div class="field">
+						<label for="salaryMin">Minimum Salary</label>
+						<input
+							id="salaryMin"
+							type="number"
+							bind:value={salaryMin}
+							placeholder="e.g. 60000"
+							min="0"
+							disabled={isSaving}
+							class:invalid={fieldErrors['salaryMin']}
+						/>
+						{#if fieldErrors['salaryMin']}
+							<span class="field-error">{fieldErrors['salaryMin']}</span>
+						{/if}
+					</div>
+					<div class="field">
+						<label for="salaryMax">Maximum Salary</label>
+						<input
+							id="salaryMax"
+							type="number"
+							bind:value={salaryMax}
+							placeholder="e.g. 90000"
+							min="0"
+							disabled={isSaving}
+							class:invalid={fieldErrors['salaryMax']}
+						/>
+						{#if fieldErrors['salaryMax']}
+							<span class="field-error">{fieldErrors['salaryMax']}</span>
+						{/if}
+					</div>
+				</div>
+				<span class="field-hint salary-hint">Annual salary in whole currency units. Leave both blank to not disclose.</span>
 
 				<div class="field field-checkbox">
 					<label>
@@ -358,9 +405,16 @@
 
 	.required { color: var(--color-danger); }
 
+	.salary-hint {
+		display: block;
+		margin-top: -0.75rem;
+		margin-bottom: 1rem;
+	}
+
 	input[type='text'],
 	input[type='url'],
 	input[type='date'],
+	input[type='number'],
 	select {
 		padding: 0.5rem 0.75rem;
 		border: 1px solid var(--color-border);

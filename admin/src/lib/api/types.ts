@@ -33,6 +33,8 @@ export interface JobListItem {
 
 export interface JobRead extends JobListItem {
 	description: string;
+	salary_min: number | null;
+	salary_max: number | null;
 	application_mode: ApplicationMode;
 	external_apply_url: string | null;
 	form_fields: FormFieldRead[];
@@ -46,6 +48,8 @@ export interface JobUpdate {
 	employment_type: EmploymentType;
 	location: string | null;
 	is_remote: boolean;
+	salary_min: number | null;
+	salary_max: number | null;
 	application_mode: ApplicationMode;
 	external_apply_url: string | null;
 	tags: string[];
@@ -58,6 +62,8 @@ export interface JobCreate {
 	employment_type: EmploymentType;
 	location: string | null;
 	is_remote: boolean;
+	salary_min: number | null;
+	salary_max: number | null;
 	application_mode: ApplicationMode;
 	external_apply_url: string | null;
 	tags: string[];

@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
 	import { getJob } from '$lib/api/jobs';
 	import { submitApplication } from '$lib/api/applications';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
-	import type { JobRead, FormFieldRead } from '$lib/api/types';
+	import type { JobRead } from '$lib/api/types';
 
 	const log = createLogger('ApplyPage');
 
@@ -294,11 +293,36 @@
 									{/each}
 								</div>
 
-							{:else}
-								<!-- text | email | url | number -->
+							{:else if field.field_type === 'email'}
 								<input
 									id="field-{field.id}"
-									type={field.field_type}
+									type="email"
+									bind:value={responses[key]}
+									disabled={isSubmitting}
+									class:invalid={fieldErrors[key]}
+								/>
+							{:else if field.field_type === 'url'}
+								<input
+									id="field-{field.id}"
+									type="url"
+									bind:value={responses[key]}
+									disabled={isSubmitting}
+									class:invalid={fieldErrors[key]}
+								/>
+							{:else if field.field_type === 'number'}
+								<input
+									id="field-{field.id}"
+									type="text"
+									inputmode="numeric"
+									bind:value={responses[key]}
+									disabled={isSubmitting}
+									class:invalid={fieldErrors[key]}
+								/>
+							{:else}
+								<!-- text (default) -->
+								<input
+									id="field-{field.id}"
+									type="text"
 									bind:value={responses[key]}
 									disabled={isSubmitting}
 									class:invalid={fieldErrors[key]}
@@ -434,7 +458,6 @@
 	input[type='text'],
 	input[type='email'],
 	input[type='url'],
-	input[type='number'],
 	select,
 	textarea {
 		padding: 0.5rem 0.75rem;

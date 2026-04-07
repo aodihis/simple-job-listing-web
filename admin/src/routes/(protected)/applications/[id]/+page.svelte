@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { getApplication, updateApplicationStatus } from '$lib/api/applications';
+	import { getFormFields } from '$lib/api/formFields';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
 	import type { ApplicationRead, ApplicationStatus } from '$lib/api/types';
@@ -18,6 +19,7 @@
 	const STATUS_OPTIONS: ApplicationStatus[] = ['new', 'reviewed', 'rejected', 'hired'];
 
 	let application: ApplicationRead | null = null;
+	let fieldLabels: Record<string, string> = {};
 	let errorMessage = '';
 	let isLoading = true;
 	let isUpdatingStatus = false;
@@ -30,6 +32,8 @@
 		errorMessage = '';
 		try {
 			application = await getApplication(publicId);
+			const formFields = await getFormFields(application.job_public_id);
+			fieldLabels = Object.fromEntries(formFields.map((f) => [String(f.id), f.label]));
 			log.info('application.detail_loaded', { public_id: publicId });
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 404) {
@@ -113,10 +117,12 @@
 				{#if Object.keys(application.responses).length > 0}
 					<section class="card">
 						<h2 class="card-title">Form Responses</h2>
-						<dl class="responses-grid">
+						<dl class="responses-list">
 							{#each Object.entries(application.responses) as [fieldId, value]}
-								<dt class="field-id">Field #{fieldId}</dt>
-								<dd class="field-value">{formatResponseValue(value)}</dd>
+								<div class="response-item">
+									<dt class="field-id">{fieldLabels[fieldId] ?? `Field #${fieldId}`}</dt>
+									<dd class="field-value">{formatResponseValue(value)}</dd>
+								</div>
 							{/each}
 						</dl>
 					</section>
@@ -275,26 +281,32 @@
 		text-decoration: underline;
 	}
 
-	.responses-grid {
-		display: grid;
-		grid-template-columns: 100px 1fr;
-		gap: 0.5rem 1rem;
+	.responses-list {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 		margin: 0;
 	}
 
+	.response-item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
 	.field-id {
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--color-text-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		padding-top: 0.1rem;
 	}
 
 	.field-value {
 		margin: 0;
 		font-size: 0.9rem;
 		word-break: break-word;
+		white-space: pre-wrap;
 	}
 
 	.muted {

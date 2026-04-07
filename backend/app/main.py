@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.logging.config import configure_logging, get_logger
 from app.logging.middleware import RequestLoggingMiddleware
-from app.routers import applications, auth, jobs, public_jobs, settings
+from app.routers import applications, auth, jobs, public_jobs, settings as settings_router
 from app.utils.exceptions import AppException
 
 settings = get_settings()
@@ -59,4 +59,4 @@ app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(public_jobs.router)
-app.include_router(settings.router)
+app.include_router(settings_router.router)
