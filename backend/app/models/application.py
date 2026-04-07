@@ -8,6 +8,8 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.application_education import ApplicationEducation
+from app.models.application_experience import ApplicationExperience
 
 
 class Application(Base):
@@ -43,6 +45,12 @@ class Application(Base):
     )
 
     job = relationship("Job", back_populates="applications")
+    education: Mapped[list[ApplicationEducation]] = relationship(
+        "ApplicationEducation", cascade="all, delete-orphan", lazy="selectin"
+    )
+    experience: Mapped[list[ApplicationExperience]] = relationship(
+        "ApplicationExperience", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     # ── Python-level helpers ────────────────────────────────────────────────
 

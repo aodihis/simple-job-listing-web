@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.config import get_settings
 from app.logging.config import configure_logging, get_logger
@@ -52,6 +53,12 @@ app.add_middleware(RequestLoggingMiddleware)
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+# Convert pydantic ValidationError raised inside route handlers to 422
+@app.exception_handler(ValidationError)
+async def pydantic_validation_handler(request: Request, exc: ValidationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 # Routers

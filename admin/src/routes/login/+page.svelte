@@ -3,7 +3,7 @@
 	import { loginAdmin } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
-	import { token } from '$lib/stores/auth';
+	import { setAuth } from '$lib/utils/auth';
 
 	const log = createLogger('LoginPage');
 
@@ -18,7 +18,7 @@
 
 		try {
 			const response = await loginAdmin(email, password);
-			token.set(response.access_token);
+			setAuth(response);
 			log.info('auth.login_success', { email });
 			goto('/dashboard', { replaceState: true });
 		} catch (err) {

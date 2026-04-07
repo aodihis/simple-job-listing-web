@@ -3,7 +3,8 @@
  */
 
 import { get } from 'svelte/store';
-import { token } from '$lib/stores/auth';
+import { token, refreshToken } from '$lib/stores/auth';
+import type { TokenResponse } from '$lib/api/types';
 
 /**
  * Decode the JWT payload (base64url → JSON).
@@ -32,15 +33,24 @@ export function isTokenExpired(jwt: string): boolean {
 }
 
 /**
- * Clear the auth token from the store (and thereby from localStorage).
- * Call this on logout or when a 401 is received from the API.
+ * Persist both tokens to their stores (and thereby to localStorage).
  */
-export function clearAuth(): void {
-	token.set(null);
+export function setAuth(response: TokenResponse): void {
+	token.set(response.access_token);
+	refreshToken.set(response.refresh_token);
 }
 
 /**
- * Returns the current token string if it exists and is not expired.
+ * Clear both auth tokens from the stores (and thereby from localStorage).
+ * Call this on logout or when a refresh attempt fails.
+ */
+export function clearAuth(): void {
+	token.set(null);
+	refreshToken.set(null);
+}
+
+/**
+ * Returns the current access token string if it exists and is not expired.
  * Returns null otherwise.
  */
 export function getValidToken(): string | null {

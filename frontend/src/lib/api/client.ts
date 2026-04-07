@@ -11,8 +11,9 @@ import { ApiError } from './types';
 const log = createLogger('api/client');
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+	const isFormData = options.body instanceof FormData;
 	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
+		...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
 		...(options.headers as Record<string, string>),
 	};
 
@@ -41,11 +42,7 @@ export const api = {
 	post: <T>(path: string, body: unknown) =>
 		apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) }),
 
-	/** For multipart/form-data — Content-Type is NOT set so the browser includes the boundary. */
+	/** For multipart/form-data — Content-Type is omitted so the browser sets it with the boundary. */
 	postFormData: <T>(path: string, body: FormData) =>
-		apiFetch<T>(path, {
-			method: 'POST',
-			body,
-			headers: {}, // override default Content-Type: application/json
-		}),
+		apiFetch<T>(path, { method: 'POST', body }),
 };

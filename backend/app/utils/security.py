@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -46,3 +48,13 @@ def decode_token(token: str) -> dict:
         return payload
     except JWTError as exc:
         raise UnauthorizedError("Invalid or expired token.") from exc
+
+
+def generate_refresh_token() -> str:
+    """Return a cryptographically random URL-safe token string (48 bytes → 64 chars)."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(raw_token: str) -> str:
+    """Return the SHA-256 hex digest of a raw refresh token for safe DB storage."""
+    return hashlib.sha256(raw_token.encode()).hexdigest()

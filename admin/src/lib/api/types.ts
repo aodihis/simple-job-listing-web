@@ -1,5 +1,6 @@
 export interface TokenResponse {
 	access_token: string;
+	refresh_token: string;
 	token_type: string;
 	expires_in: number;
 }
@@ -116,6 +117,23 @@ export interface FormFieldsUpdate {
 
 export type ApplicationStatus = 'new' | 'reviewed' | 'rejected' | 'hired';
 
+export interface EducationEntry {
+	institution: string;
+	degree: string;
+	field_of_study: string | null;
+	gpa: string | null;
+	start_year: number | null;
+	end_year: number | null; // null = currently enrolled / present
+}
+
+export interface ExperienceEntry {
+	title: string;
+	company: string;
+	summary: string | null;
+	start_year: number | null;
+	end_year: number | null; // null = current position
+}
+
 export interface ApplicationRead {
 	public_id: string;
 	applicant_name: string;
@@ -126,6 +144,8 @@ export interface ApplicationRead {
 	job_public_id: string;
 	job_title: string;
 	cv_filename: string | null;
+	education: EducationEntry[];
+	experience: ExperienceEntry[];
 }
 
 export interface PaginatedApplications {

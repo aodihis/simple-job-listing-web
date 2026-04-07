@@ -13,6 +13,25 @@ class ApplicationStatus(str, Enum):
     hired = "hired"
 
 
+# ── Education / Experience sub-schemas ────────────────────────────────────────
+
+class EducationEntry(BaseModel):
+    institution: str = Field(description="School or university name.")
+    degree: str = Field(description="Degree obtained, e.g. \"Bachelor's\", \"PhD\".")
+    field_of_study: str | None = Field(default=None, description="Major or field of study.")
+    gpa: str | None = Field(default=None, description="GPA, e.g. \"3.8\" or \"3.8/4.0\".")
+    start_year: int | None = Field(default=None, description="Year studies began.")
+    end_year: int | None = Field(default=None, description="Year studies ended; null means currently enrolled.")
+
+
+class ExperienceEntry(BaseModel):
+    title: str = Field(description="Job title.")
+    company: str = Field(description="Employer name.")
+    summary: str | None = Field(default=None, description="Brief description of responsibilities and achievements.")
+    start_year: int | None = Field(default=None, description="Year the role started.")
+    end_year: int | None = Field(default=None, description="Year the role ended; null means current position.")
+
+
 # ── Write schema (submitted by applicant) ─────────────────────────────────────
 
 class ApplicationCreate(BaseModel):
@@ -26,6 +45,14 @@ class ApplicationCreate(BaseModel):
             "Single-choice fields (text, email, url, number, radio, select) use a string value. "
             "Multi-choice fields (checkbox) use a list of strings."
         ),
+    )
+    education: list[EducationEntry] = Field(
+        default_factory=list,
+        description="List of education entries (optional).",
+    )
+    experience: list[ExperienceEntry] = Field(
+        default_factory=list,
+        description="List of work experience entries (optional).",
     )
 
     @field_validator("applicant_name", mode="before")
@@ -53,5 +80,7 @@ class ApplicationRead(BaseModel):
     job_public_id: str
     job_title: str
     cv_filename: str | None = None
+    education: list[EducationEntry] = []
+    experience: list[ExperienceEntry] = []
 
     model_config = {"from_attributes": True}

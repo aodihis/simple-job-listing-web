@@ -140,6 +140,14 @@ def apply_for_job(
             "Single-choice fields use a string value; checkbox fields use a JSON array."
         ),
     ),
+    education_json: str = Form(
+        default="[]",
+        description="JSON-encoded array of education entries.",
+    ),
+    experience_json: str = Form(
+        default="[]",
+        description="JSON-encoded array of work experience entries.",
+    ),
     cv_file: UploadFile = File(..., description="CV/resume file. Must be PDF, DOC, or DOCX. Max 10 MB."),
     db: Session = Depends(get_db),
 ) -> ApplicationConfirmation:
@@ -148,10 +156,18 @@ def apply_for_job(
     except json.JSONDecodeError:
         raise BadRequestError("responses_json must be a valid JSON object.")
 
+    try:
+        education_raw = json.loads(education_json)
+        experience_raw = json.loads(experience_json)
+    except json.JSONDecodeError:
+        raise BadRequestError("education_json and experience_json must be valid JSON arrays.")
+
     data = ApplicationCreate(
         applicant_name=applicant_name,
         applicant_email=applicant_email,
         responses=responses,
+        education=education_raw,
+        experience=experience_raw,
     )
 
     cv_content = cv_file.file.read()

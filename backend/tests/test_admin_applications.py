@@ -6,8 +6,25 @@ Tests for the admin applications endpoints:
 """
 from __future__ import annotations
 
+import json
+from io import BytesIO
+
 import pytest
 from fastapi.testclient import TestClient
+
+_FAKE_PDF = b"%PDF-1.4 fake"
+
+
+def _apply(
+    client: TestClient,
+    job_public_id: str,
+    *,
+    name: str = "Jane Doe",
+    email: str = "jane@example.com",
+) -> "Response":  # type: ignore[name-defined]
+    data = {"applicant_name": name, "applicant_email": email, "responses_json": "{}"}
+    files = {"cv_file": ("cv.pdf", BytesIO(_FAKE_PDF), "application/pdf")}
+    return client.post(f"/api/v1/jobs/{job_public_id}/apply", data=data, files=files)
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -64,7 +81,7 @@ def job(client: TestClient, auth_headers: dict) -> dict:
 @pytest.fixture()
 def submitted_application(client: TestClient, job: dict) -> dict:
     """Submit one application and return the confirmation payload."""
-    resp = client.post(f"/api/v1/jobs/{job['public_id']}/apply", json=APPLICANT_A)
+    resp = _apply(client, job["public_id"], name=APPLICANT_A["applicant_name"], email=APPLICANT_A["applicant_email"])
     assert resp.status_code == 201
     return resp.json()
 
@@ -72,8 +89,8 @@ def submitted_application(client: TestClient, job: dict) -> dict:
 @pytest.fixture()
 def two_applications(client: TestClient, job: dict) -> list[dict]:
     """Submit two applications and return both confirmation payloads."""
-    r1 = client.post(f"/api/v1/jobs/{job['public_id']}/apply", json=APPLICANT_A)
-    r2 = client.post(f"/api/v1/jobs/{job['public_id']}/apply", json=APPLICANT_B)
+    r1 = _apply(client, job["public_id"], name=APPLICANT_A["applicant_name"], email=APPLICANT_A["applicant_email"])
+    r2 = _apply(client, job["public_id"], name=APPLICANT_B["applicant_name"], email=APPLICANT_B["applicant_email"])
     assert r1.status_code == 201
     assert r2.status_code == 201
     return [r1.json(), r2.json()]

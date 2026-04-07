@@ -31,6 +31,68 @@
 
 	let fieldErrors: Record<string, string> = {};
 
+	// ── Education / Experience state ──────────────────────────────────────────
+	interface EduDraft {
+		institution: string;
+		degree: string;
+		field_of_study: string;
+		gpa: string;
+		start_year: string;
+		end_year: string; // empty string = present
+	}
+	interface ExpDraft {
+		title: string;
+		company: string;
+		summary: string;
+		start_year: string;
+		end_year: string; // empty string = present
+	}
+
+	const currentYear = new Date().getFullYear();
+	let education: EduDraft[] = [];
+	let experience: ExpDraft[] = [];
+
+	function addEducation() {
+		education = [
+			...education,
+			{ institution: '', degree: '', field_of_study: '', gpa: '', start_year: '', end_year: '' },
+		];
+	}
+	function removeEducation(i: number) {
+		education = education.filter((_, idx) => idx !== i);
+	}
+
+	function addExperience() {
+		experience = [
+			...experience,
+			{ title: '', company: '', summary: '', start_year: '', end_year: '' },
+		];
+	}
+	function removeExperience(i: number) {
+		experience = experience.filter((_, idx) => idx !== i);
+	}
+
+	function serializeEducation() {
+		return education.map((e) => ({
+			institution: e.institution,
+			degree: e.degree,
+			field_of_study: e.field_of_study || null,
+			gpa: e.gpa || null,
+			start_year: e.start_year ? parseInt(e.start_year) : null,
+			end_year: e.end_year ? parseInt(e.end_year) : null,
+		}));
+	}
+
+	function serializeExperience() {
+		return experience.map((e) => ({
+			title: e.title,
+			company: e.company,
+			summary: e.summary || null,
+			start_year: e.start_year ? parseInt(e.start_year) : null,
+			end_year: e.end_year ? parseInt(e.end_year) : null,
+		}));
+	}
+
 	// ── Load job ──────────────────────────────────────────────────────────────
 	onMount(async () => {
 		try {
@@ -127,6 +189,8 @@
 					applicant_name: applicantName.trim(),
 					applicant_email: applicantEmail.trim(),
 					responses,
+					education: serializeEducation(),
+					experience: serializeExperience(),
 				},
 				cvFile,
 			);
@@ -264,6 +328,127 @@
 						<span class="field-error">{fieldErrors['_cv']}</span>
 					{/if}
 				</div>
+			</div>
+
+			<!-- Education -->
+			<div class="form-section">
+				<div class="section-header">
+					<h2>Education</h2>
+					<button type="button" class="btn-add" on:click={addEducation}>+ Add</button>
+				</div>
+
+				{#if education.length === 0}
+					<p class="section-empty">No education added yet.</p>
+				{/if}
+
+				{#each education as edu, i}
+					<div class="entry-card">
+						<div class="entry-header">
+							<span class="entry-label">Education #{i + 1}</span>
+							<button
+								type="button"
+								class="btn-remove"
+								on:click={() => removeEducation(i)}
+								disabled={isSubmitting}
+							>Remove</button>
+						</div>
+
+						<div class="field-row">
+							<div class="field">
+								<label for="edu-institution-{i}">Institution</label>
+								<input id="edu-institution-{i}" type="text" bind:value={edu.institution} placeholder="e.g. MIT" disabled={isSubmitting} />
+							</div>
+							<div class="field">
+								<label for="edu-degree-{i}">Degree</label>
+								<select id="edu-degree-{i}" bind:value={edu.degree} disabled={isSubmitting}>
+									<option value="">Select degree…</option>
+									<option>High School Diploma</option>
+									<option>Associate's</option>
+									<option>Bachelor's</option>
+									<option>Master's</option>
+									<option>PhD / Doctorate</option>
+									<option>Professional (MD, JD, etc.)</option>
+									<option>Other</option>
+								</select>
+							</div>
+						</div>
+
+						<div class="field-row">
+							<div class="field">
+								<label for="edu-field-{i}">Field of study</label>
+								<input id="edu-field-{i}" type="text" bind:value={edu.field_of_study} placeholder="e.g. Computer Science" disabled={isSubmitting} />
+							</div>
+							<div class="field">
+								<label for="edu-gpa-{i}">GPA</label>
+								<input id="edu-gpa-{i}" type="text" bind:value={edu.gpa} placeholder="e.g. 3.8 / 4.0" disabled={isSubmitting} />
+							</div>
+						</div>
+
+						<div class="field-row">
+							<div class="field">
+								<label for="edu-start-{i}">Start year</label>
+								<input id="edu-start-{i}" type="number" bind:value={edu.start_year} placeholder="2018" min="1950" max={currentYear} disabled={isSubmitting} />
+							</div>
+							<div class="field">
+								<label for="edu-end-{i}">End year <span class="hint-inline">(blank = present)</span></label>
+								<input id="edu-end-{i}" type="number" bind:value={edu.end_year} placeholder="Present" min="1950" max={currentYear + 10} disabled={isSubmitting} />
+							</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<!-- Work Experience -->
+			<div class="form-section">
+				<div class="section-header">
+					<h2>Work experience</h2>
+					<button type="button" class="btn-add" on:click={addExperience}>+ Add</button>
+				</div>
+
+				{#if experience.length === 0}
+					<p class="section-empty">No experience added yet.</p>
+				{/if}
+
+				{#each experience as exp, i}
+					<div class="entry-card">
+						<div class="entry-header">
+							<span class="entry-label">Experience #{i + 1}</span>
+							<button
+								type="button"
+								class="btn-remove"
+								on:click={() => removeExperience(i)}
+								disabled={isSubmitting}
+							>Remove</button>
+						</div>
+
+						<div class="field-row">
+							<div class="field">
+								<label for="exp-title-{i}">Job title</label>
+								<input id="exp-title-{i}" type="text" bind:value={exp.title} placeholder="e.g. Software Engineer" disabled={isSubmitting} />
+							</div>
+							<div class="field">
+								<label for="exp-company-{i}">Company</label>
+								<input id="exp-company-{i}" type="text" bind:value={exp.company} placeholder="e.g. Acme Corp" disabled={isSubmitting} />
+							</div>
+						</div>
+
+						<div class="field-row">
+							<div class="field">
+								<label for="exp-start-{i}">Start year</label>
+								<input id="exp-start-{i}" type="number" bind:value={exp.start_year} placeholder="2020" min="1950" max={currentYear} disabled={isSubmitting} />
+							</div>
+							<div class="field">
+								<label for="exp-end-{i}">End year <span class="hint-inline">(blank = present)</span></label>
+								<input id="exp-end-{i}" type="number" bind:value={exp.end_year} placeholder="Present" min="1950" max={currentYear + 10} disabled={isSubmitting} />
+							</div>
+						</div>
+
+						<div class="field">
+							<label for="exp-summary-{i}">Summary</label>
+							<textarea id="exp-summary-{i}" bind:value={exp.summary} rows="3" placeholder="Briefly describe your responsibilities and achievements…" disabled={isSubmitting}></textarea>
+						</div>
+					</div>
+				{/each}
 			</div>
 
 			<!-- Dynamic fields -->
@@ -625,9 +810,88 @@
 	}
 	.btn-secondary:hover { border-color: #a0aec0; }
 
+	/* Section header with add button */
+	.section-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 1rem;
+	}
+	.section-header h2 { margin: 0; }
+
+	.section-empty {
+		font-size: 0.875rem;
+		color: #a0aec0;
+		margin: 0;
+	}
+
+	/* Entry cards */
+	.entry-card {
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		padding: 1rem;
+		margin-bottom: 0.75rem;
+	}
+	.entry-card:last-of-type { margin-bottom: 0; }
+
+	.entry-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+	}
+	.entry-label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #718096;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	/* Two-column row */
+	.field-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+
+	/* Add / remove buttons */
+	.btn-add {
+		padding: 0.3rem 0.75rem;
+		background: white;
+		color: #3b82f6;
+		border: 1px dashed #93c5fd;
+		border-radius: 6px;
+		font-size: 0.825rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s, border-color 0.15s;
+	}
+	.btn-add:hover { background: #eff6ff; border-color: #3b82f6; }
+
+	.btn-remove {
+		padding: 0.2rem 0.5rem;
+		background: none;
+		color: #e53e3e;
+		border: none;
+		font-size: 0.8rem;
+		cursor: pointer;
+		opacity: 0.7;
+		transition: opacity 0.15s;
+	}
+	.btn-remove:hover:not(:disabled) { opacity: 1; }
+	.btn-remove:disabled { cursor: not-allowed; opacity: 0.4; }
+
+	.hint-inline {
+		font-size: 0.75rem;
+		color: #a0aec0;
+		font-weight: 400;
+	}
+
 	@media (max-width: 600px) {
 		.form-section { padding: 1.25rem; }
 		.form-actions { flex-direction: column-reverse; }
 		.btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+		.field-row { grid-template-columns: 1fr; }
 	}
 </style>

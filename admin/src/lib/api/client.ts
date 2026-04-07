@@ -2,7 +2,8 @@
  * Auth-aware fetch wrapper.
  *
  * - Attaches Authorization: Bearer <token> on every request
- * - On 401: clears auth store and redirects to /login
+ * - On 401: attempts a silent token refresh; if successful, retries the original request once
+ * - On refresh failure (or no refresh token): clears auth and redirects to /login
  * - On non-OK: throws ApiError with status and message
  *
  * Never call fetch() directly — use this client or the resource modules in $lib/api/.
@@ -11,13 +12,46 @@
 import { goto } from '$app/navigation';
 import { get } from 'svelte/store';
 import { createLogger } from '$lib/logger';
-import { token } from '$lib/stores/auth';
-import { clearAuth } from '$lib/utils/auth';
+import { token, refreshToken } from '$lib/stores/auth';
+import { clearAuth, setAuth } from '$lib/utils/auth';
 import { ApiError } from './types';
+import type { TokenResponse } from './types';
 
 const log = createLogger('api/client');
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+// Shared refresh promise — ensures only one refresh call happens at a time even if
+// multiple requests 401 simultaneously.
+let activeRefresh: Promise<string | null> | null = null;
+
+async function attemptRefresh(): Promise<string | null> {
+	if (activeRefresh) return activeRefresh;
+
+	activeRefresh = (async (): Promise<string | null> => {
+		const rt = get(refreshToken);
+		if (!rt) return null;
+		try {
+			const response = await publicFetch<TokenResponse>('/api/v1/auth/refresh', {
+				method: 'POST',
+				body: JSON.stringify({ refresh_token: rt }),
+			});
+			setAuth(response);
+			log.info('auth.token_refreshed', {});
+			return response.access_token;
+		} catch {
+			log.warn('auth.refresh_failed', {});
+			clearAuth();
+			return null;
+		}
+	})();
+
+	try {
+		return await activeRefresh;
+	} finally {
+		activeRefresh = null;
+	}
+}
+
+async function apiFetch<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<T> {
 	const currentToken = get(token);
 
 	const headers: Record<string, string> = {
@@ -33,9 +67,13 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
 	const response = await fetch(path, { ...options, headers });
 
-	if (response.status === 401) {
+	if (response.status === 401 && !isRetry) {
 		log.warn('api.unauthorized', { path });
-		clearAuth();
+		const newToken = await attemptRefresh();
+		if (newToken) {
+			// Retry once with the new access token
+			return apiFetch<T>(path, options, true);
+		}
 		goto('/login');
 		throw new ApiError(401, 'Session expired. Please log in again.');
 	}
@@ -76,8 +114,8 @@ export const api = {
 };
 
 /**
- * Unauthenticated fetch — for login and register endpoints.
- * Same error handling as api, but no Authorization header.
+ * Unauthenticated fetch — for login, register, and refresh endpoints.
+ * Same error handling as api, but no Authorization header and no retry logic.
  */
 export async function publicFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
 	const headers: Record<string, string> = {

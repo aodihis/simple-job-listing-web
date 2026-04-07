@@ -175,6 +175,8 @@ class TestSendNewApplicationNotification:
         self, client: TestClient, auth_headers: dict
     ) -> None:
         """Integration: POST /jobs/{id}/apply enqueues the background task."""
+        from io import BytesIO
+
         job_resp = client.post(ADMIN_JOBS_URL, json=BASE_JOB, headers=auth_headers)
         job_id = job_resp.json()["public_id"]
 
@@ -183,7 +185,8 @@ class TestSendNewApplicationNotification:
         ) as mock_notify:
             resp = client.post(
                 PUBLIC_APPLY_URL.format(job_id=job_id),
-                json={"applicant_name": "Alice", "applicant_email": "alice@x.com", "responses": {}},
+                data={"applicant_name": "Alice", "applicant_email": "alice@x.com", "responses_json": "{}"},
+                files={"cv_file": ("cv.pdf", BytesIO(b"%PDF fake"), "application/pdf")},
             )
             assert resp.status_code == 201
             # TestClient runs background tasks synchronously
@@ -273,6 +276,8 @@ class TestSendApplicationConfirmation:
         self, client: TestClient, auth_headers: dict
     ) -> None:
         """Integration: POST /jobs/{id}/apply enqueues both the admin notification and applicant confirmation."""
+        from io import BytesIO
+
         job_resp = client.post(ADMIN_JOBS_URL, json=BASE_JOB, headers=auth_headers)
         job_id = job_resp.json()["public_id"]
 
@@ -283,7 +288,8 @@ class TestSendApplicationConfirmation:
         ) as mock_confirm:
             resp = client.post(
                 PUBLIC_APPLY_URL.format(job_id=job_id),
-                json={"applicant_name": "Bob", "applicant_email": "bob@x.com", "responses": {}},
+                data={"applicant_name": "Bob", "applicant_email": "bob@x.com", "responses_json": "{}"},
+                files={"cv_file": ("cv.pdf", BytesIO(b"%PDF fake"), "application/pdf")},
             )
             assert resp.status_code == 201
             mock_notify.assert_called_once()

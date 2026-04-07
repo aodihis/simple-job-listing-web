@@ -3,7 +3,7 @@
 	import { registerFirstAdmin } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/types';
 	import { createLogger } from '$lib/logger';
-	import { token } from '$lib/stores/auth';
+	import { setAuth } from '$lib/utils/auth';
 
 	const log = createLogger('RegisterPage');
 
@@ -48,7 +48,7 @@
 		isLoading = true;
 		try {
 			const response = await registerFirstAdmin(email, displayName, password);
-			token.set(response.access_token);
+			setAuth(response);
 			log.info('auth.register_success', { email });
 			goto('/dashboard', { replaceState: true });
 		} catch (err) {

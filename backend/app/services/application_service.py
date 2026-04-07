@@ -8,9 +8,18 @@ from sqlalchemy.orm import Session
 
 from app.logging.config import get_logger
 from app.models.application import Application
+from app.models.application_education import ApplicationEducation
+from app.models.application_experience import ApplicationExperience
 from app.models.form_field import JobFormField
 from app.models.job import Job
-from app.schemas.application import ApplicationCreate, ApplicationConfirmation, ApplicationRead, ApplicationStatus
+from app.schemas.application import (
+    ApplicationConfirmation,
+    ApplicationCreate,
+    ApplicationRead,
+    ApplicationStatus,
+    EducationEntry,
+    ExperienceEntry,
+)
 from app.storage import get_storage
 from app.utils.exceptions import BadRequestError, ConflictError, NotFoundError
 
@@ -78,7 +87,27 @@ def submit_application(
     )
     application.responses = data.responses
     db.add(application)
-    db.flush()  # populate application.public_id before saving CV
+    db.flush()  # populate application.id and public_id before saving related rows
+
+    for edu in data.education:
+        db.add(ApplicationEducation(
+            application_id=application.id,
+            institution=edu.institution,
+            degree=edu.degree,
+            field_of_study=edu.field_of_study,
+            gpa=edu.gpa,
+            start_year=edu.start_year,
+            end_year=edu.end_year,
+        ))
+    for exp in data.experience:
+        db.add(ApplicationExperience(
+            application_id=application.id,
+            title=exp.title,
+            company=exp.company,
+            summary=exp.summary,
+            start_year=exp.start_year,
+            end_year=exp.end_year,
+        ))
 
     # Upload CV via storage backend (after flush so we have the public_id)
     saved_path, safe_name = _upload_cv(application.public_id, cv_filename, cv_content)
@@ -259,6 +288,27 @@ def _to_read(application: Application) -> ApplicationRead:
         job_public_id=application.job.public_id,
         job_title=application.job.title,
         cv_filename=application.cv_filename,
+        education=[
+            EducationEntry(
+                institution=e.institution,
+                degree=e.degree,
+                field_of_study=e.field_of_study,
+                gpa=e.gpa,
+                start_year=e.start_year,
+                end_year=e.end_year,
+            )
+            for e in application.education
+        ],
+        experience=[
+            ExperienceEntry(
+                title=e.title,
+                company=e.company,
+                summary=e.summary,
+                start_year=e.start_year,
+                end_year=e.end_year,
+            )
+            for e in application.experience
+        ],
     )
 
 

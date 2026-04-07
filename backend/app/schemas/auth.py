@@ -16,8 +16,13 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str = Field(description="JWT access token. Pass as 'Authorization: Bearer <token>'.")
+    refresh_token: str = Field(description="Opaque refresh token. Use POST /auth/refresh to obtain a new access token.")
     token_type: str = Field(default="bearer", description="Always 'bearer'.")
-    expires_in: int = Field(description="Token lifetime in seconds.")
+    expires_in: int = Field(description="Access token lifetime in seconds.")
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(description="The refresh token received at login.")
 
 
 class AdminUserRead(BaseModel):

@@ -19,6 +19,13 @@ export async function registerFirstAdmin(
 	});
 }
 
+export async function refreshAccessToken(rawRefreshToken: string): Promise<TokenResponse> {
+	return publicFetch<TokenResponse>('/api/v1/auth/refresh', {
+		method: 'POST',
+		body: JSON.stringify({ refresh_token: rawRefreshToken }),
+	});
+}
+
 export async function getMe(): Promise<AdminUserRead> {
 	const { api } = await import('./client');
 	return api.get<AdminUserRead>('/api/v1/auth/me');

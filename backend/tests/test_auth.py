@@ -1,5 +1,6 @@
 """
-Tests for POST /api/v1/auth/register, POST /api/v1/auth/login, GET /api/v1/auth/me.
+Tests for POST /api/v1/auth/register, POST /api/v1/auth/login,
+POST /api/v1/auth/refresh, GET /api/v1/auth/me.
 """
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
+REFRESH_URL = "/api/v1/auth/refresh"
 ME_URL = "/api/v1/auth/me"
 
 ADMIN_DATA = {
@@ -23,6 +25,7 @@ class TestRegister:
         assert response.status_code == 201
         body = response.json()
         assert "access_token" in body
+        assert "refresh_token" in body
         assert body["token_type"] == "bearer"
         assert body["expires_in"] > 0
 
@@ -60,6 +63,7 @@ class TestLogin:
         assert response.status_code == 200
         body = response.json()
         assert "access_token" in body
+        assert "refresh_token" in body
         assert body["token_type"] == "bearer"
 
     def test_login_fails_with_wrong_password(self, client: TestClient) -> None:
@@ -115,3 +119,55 @@ class TestMe:
     def test_me_fails_with_malformed_header(self, client: TestClient) -> None:
         response = client.get(ME_URL, headers={"Authorization": "NotBearer token"})
         assert response.status_code == 401
+
+
+class TestRefresh:
+    @pytest.fixture(autouse=True)
+    def create_admin(self, client: TestClient) -> None:
+        client.post(REGISTER_URL, json=ADMIN_DATA)
+
+    def _login(self, client: TestClient) -> dict:
+        resp = client.post(
+            LOGIN_URL,
+            json={"email": ADMIN_DATA["email"], "password": ADMIN_DATA["password"]},
+        )
+        return resp.json()
+
+    def test_refresh_returns_new_tokens(self, client: TestClient) -> None:
+        tokens = self._login(client)
+        response = client.post(REFRESH_URL, json={"refresh_token": tokens["refresh_token"]})
+        assert response.status_code == 200
+        body = response.json()
+        assert "access_token" in body
+        assert "refresh_token" in body
+        assert body["token_type"] == "bearer"
+        assert body["expires_in"] > 0
+
+    def test_refresh_token_is_rotated(self, client: TestClient) -> None:
+        """Each refresh issues a new refresh token; the old one must not work again."""
+        tokens = self._login(client)
+        old_rt = tokens["refresh_token"]
+
+        resp = client.post(REFRESH_URL, json={"refresh_token": old_rt})
+        assert resp.status_code == 200
+
+        # Reusing the old refresh token must fail
+        resp2 = client.post(REFRESH_URL, json={"refresh_token": old_rt})
+        assert resp2.status_code == 401
+
+    def test_new_access_token_is_valid(self, client: TestClient) -> None:
+        tokens = self._login(client)
+        refresh_resp = client.post(REFRESH_URL, json={"refresh_token": tokens["refresh_token"]})
+        new_access_token = refresh_resp.json()["access_token"]
+
+        me_resp = client.get(ME_URL, headers={"Authorization": f"Bearer {new_access_token}"})
+        assert me_resp.status_code == 200
+        assert me_resp.json()["email"] == ADMIN_DATA["email"]
+
+    def test_refresh_fails_with_invalid_token(self, client: TestClient) -> None:
+        response = client.post(REFRESH_URL, json={"refresh_token": "this-is-not-a-valid-token"})
+        assert response.status_code == 401
+
+    def test_refresh_fails_with_missing_token(self, client: TestClient) -> None:
+        response = client.post(REFRESH_URL, json={})
+        assert response.status_code == 422

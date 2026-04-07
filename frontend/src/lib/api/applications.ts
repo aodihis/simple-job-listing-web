@@ -10,6 +10,8 @@ export async function submitApplication(
 	form.append('applicant_name', data.applicant_name);
 	form.append('applicant_email', data.applicant_email);
 	form.append('responses_json', JSON.stringify(data.responses));
+	form.append('education_json', JSON.stringify(data.education ?? []));
+	form.append('experience_json', JSON.stringify(data.experience ?? []));
 	form.append('cv_file', cvFile);
 	return api.postFormData<ApplicationConfirmation>(`/api/v1/jobs/${jobPublicId}/apply`, form);
 }

@@ -130,6 +130,46 @@
 					</dl>
 				</section>
 
+				{#if application.education.length > 0}
+					<section class="card">
+						<h2 class="card-title">Education</h2>
+						<div class="entry-list">
+							{#each application.education as edu, i}
+								<div class="entry-block" class:entry-divider={i > 0}>
+									<p class="entry-title">
+										{edu.degree ?? ''}
+										{#if edu.field_of_study} — {edu.field_of_study}{/if}
+									</p>
+									<p class="entry-sub">{edu.institution}</p>
+									<p class="entry-meta">
+										{edu.start_year ?? '?'} – {edu.end_year ?? 'Present'}
+										{#if edu.gpa} · GPA: {edu.gpa}{/if}
+									</p>
+								</div>
+							{/each}
+						</div>
+					</section>
+				{/if}
+
+				{#if application.experience.length > 0}
+					<section class="card">
+						<h2 class="card-title">Work Experience</h2>
+						<div class="entry-list">
+							{#each application.experience as exp, i}
+								<div class="entry-block" class:entry-divider={i > 0}>
+									<p class="entry-title">{exp.title} — {exp.company}</p>
+									<p class="entry-meta">
+										{exp.start_year ?? '?'} – {exp.end_year ?? 'Present'}
+									</p>
+									{#if exp.summary}
+										<p class="entry-summary">{exp.summary}</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</section>
+				{/if}
+
 				{#if Object.keys(application.responses).length > 0}
 					<section class="card">
 						<h2 class="card-title">Form Responses</h2>
@@ -440,5 +480,49 @@
 		font-family: monospace;
 		word-break: break-all;
 		margin: 0;
+	}
+
+	/* Education / Experience entries */
+	.entry-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.entry-block {
+		padding: 0.75rem 0;
+	}
+
+	.entry-divider {
+		border-top: 1px solid var(--color-border);
+	}
+
+	.entry-block:first-child {
+		padding-top: 0;
+	}
+
+	.entry-title {
+		margin: 0 0 0.15rem;
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.entry-sub {
+		margin: 0 0 0.15rem;
+		font-size: 0.875rem;
+		color: var(--color-text-muted);
+	}
+
+	.entry-meta {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+	}
+
+	.entry-summary {
+		margin: 0.4rem 0 0;
+		font-size: 0.875rem;
+		color: var(--color-text);
+		white-space: pre-wrap;
 	}
 </style>
